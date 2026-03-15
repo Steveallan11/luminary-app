@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Check, Lock, Play, Clock, X, Star } from 'lucide-react';
+import { ArrowLeft, Check, Lock, Play, Clock, X, Star, Zap } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import Button from '@/components/ui/Button';
 import { MOCK_SUBJECTS, MOCK_TOPICS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
@@ -12,13 +12,36 @@ import { TopicStatus, Topic } from '@/types';
 
 export default function SubjectPage() {
   const params = useParams();
-  const router = useRouter();
   const slug = params.slug as string;
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
 
-  const subject = MOCK_SUBJECTS.find(s => s.slug === slug);
+  const subject = MOCK_SUBJECTS.find((s) => s.slug === slug);
   const topics = MOCK_TOPICS[slug] || [];
-  const progress = MOCK_TOPIC_PROGRESS[slug] || {};
+  const rawProgress = MOCK_TOPIC_PROGRESS[slug] || {};
+
+  // Build data-driven progress with sequential unlock logic
+  const topicProgress = useMemo(() => {
+    const result: Record<string, { status: TopicStatus; mastery_score: number }> = {};
+    topics.forEach((topic, i) => {
+      const raw = rawProgress[topic.slug];
+      if (raw) {
+        result[topic.slug] = raw;
+      } else {
+        // Sequential unlock: first topic always available, rest locked until previous completed
+        if (i === 0) {
+          result[topic.slug] = { status: 'available', mastery_score: 0 };
+        } else {
+          const prevTopic = topics[i - 1];
+          const prevStatus = result[prevTopic.slug]?.status;
+          result[topic.slug] = {
+            status: prevStatus === 'completed' ? 'available' : 'locked',
+            mastery_score: 0,
+          };
+        }
+      }
+    });
+    return result;
+  }, [topics, rawProgress]);
 
   if (!subject) {
     return (
@@ -30,15 +53,24 @@ export default function SubjectPage() {
     );
   }
 
-  const completedCount = Object.values(progress).filter(s => s === 'completed').length;
-  const totalCount = topics.length || 5;
+  const completedCount = Object.values(topicProgress).filter((t) => t.status === 'completed').length;
+  const totalCount = topics.length || 1;
 
-  const getStatusIcon = (status: TopicStatus) => {
+  const getStatusIcon = (status: TopicStatus, mastery: number) => {
     switch (status) {
-      case 'completed': return <Check size={16} className="text-white" />;
-      case 'in_progress': return <Play size={14} className="text-white" />;
-      case 'available': return <Star size={14} className="text-white" />;
-      case 'locked': return <Lock size={14} className="text-white/50" />;
+      case 'completed':
+        return (
+          <div className="flex flex-col items-center">
+            <Check size={14} className="text-white" />
+            <span className="text-[9px] text-white/80 font-bold mt-0.5">{mastery}%</span>
+          </div>
+        );
+      case 'in_progress':
+        return <Play size={14} className="text-white" />;
+      case 'available':
+        return <Star size={14} className="text-white" />;
+      case 'locked':
+        return <Lock size={14} className="text-white/40" />;
     }
   };
 
@@ -75,15 +107,14 @@ export default function SubjectPage() {
     }
   };
 
+  const selectedStatus = selectedTopic ? topicProgress[selectedTopic.slug] : null;
+  const isSelectedClickable = selectedStatus && selectedStatus.status !== 'locked';
+
   return (
     <ChildLayout>
       <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Link
             href="/learn"
             className="inline-flex items-center gap-1 text-sm text-slate-light/60 hover:text-white transition-colors mb-4"
@@ -135,29 +166,35 @@ export default function SubjectPage() {
             Learning Map
           </h2>
 
-          <div className="space-y-4">
+          <div className="space-y-1">
             {topics.map((topic, i) => {
-              const status = (progress[topic.slug] || 'locked') as TopicStatus;
+              const tp = topicProgress[topic.slug] || { status: 'locked' as TopicStatus, mastery_score: 0 };
+              const status = tp.status;
+              const mastery = tp.mastery_score;
               const styles = getNodeStyles(status);
               const isClickable = status !== 'locked';
+
+              // Connection line colour
+              const prevCompleted = i > 0 && topicProgress[topics[i - 1].slug]?.status === 'completed';
 
               return (
                 <motion.div
                   key={topic.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1, duration: 0.5 }}
+                  transition={{ delay: i * 0.08, duration: 0.5 }}
                 >
                   {/* Connection line */}
                   {i > 0 && (
-                    <div className="flex justify-start ml-8 -mt-4 mb-0">
-                      <div
-                        className="w-0.5 h-4"
+                    <div className="flex justify-start ml-[1.9rem] py-0">
+                      <motion.div
+                        className="w-0.5 h-5 rounded-full"
                         style={{
-                          backgroundColor: Object.values(progress).slice(0, i).every(s => s === 'completed')
-                            ? subject.colour_hex
-                            : '#2d3a5c',
+                          backgroundColor: prevCompleted ? subject.colour_hex : '#2d3a5c',
                         }}
+                        initial={{ scaleY: 0 }}
+                        animate={{ scaleY: 1 }}
+                        transition={{ delay: i * 0.08 + 0.1, duration: 0.3 }}
                       />
                     </div>
                   )}
@@ -178,19 +215,33 @@ export default function SubjectPage() {
                   >
                     {/* Status node */}
                     <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2"
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 border-2 ${
+                        status === 'in_progress' ? 'animate-pulse' : ''
+                      }`}
                       style={{
-                        backgroundColor: status === 'completed' || status === 'in_progress' ? styles.bg : 'transparent',
+                        backgroundColor:
+                          status === 'completed' || status === 'in_progress' ? styles.bg : 'transparent',
                         borderColor: styles.border,
                       }}
                     >
-                      {getStatusIcon(status)}
+                      {getStatusIcon(status, mastery)}
                     </div>
 
                     {/* Topic info */}
                     <div className="flex-1 min-w-0">
                       <h3 className="text-base font-bold text-white truncate">{topic.title}</h3>
                       <p className="text-sm text-slate-light/60 truncate">{topic.description}</p>
+                      {status === 'in_progress' && mastery > 0 && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden max-w-[120px]">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${mastery}%`, backgroundColor: subject.colour_hex }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-light/40">{mastery}% mastery</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Meta */}
@@ -210,7 +261,6 @@ export default function SubjectPage() {
       <AnimatePresence>
         {selectedTopic && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -219,7 +269,6 @@ export default function SubjectPage() {
               onClick={() => setSelectedTopic(null)}
             />
 
-            {/* Panel */}
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
@@ -249,7 +298,28 @@ export default function SubjectPage() {
                   {selectedTopic.title}
                 </h2>
 
-                <p className="text-slate-light/70 mb-6">{selectedTopic.description}</p>
+                <p className="text-slate-light/70 mb-4">{selectedTopic.description}</p>
+
+                {/* Mastery info */}
+                {selectedStatus && selectedStatus.mastery_score > 0 && (
+                  <div className="rounded-xl bg-navy/40 border border-white/10 p-3 mb-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-slate-light/60">Mastery</span>
+                      <span className="text-xs font-bold" style={{ color: subject.colour_hex }}>
+                        {selectedStatus.mastery_score}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${selectedStatus.mastery_score}%`,
+                          backgroundColor: subject.colour_hex,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4 mb-8">
                   <div className="flex items-center gap-3 text-sm">
@@ -260,21 +330,25 @@ export default function SubjectPage() {
                     <Star size={16} className="text-slate-light/50" />
                     <span className="text-slate-light/70">Key Stage: {selectedTopic.key_stage}</span>
                   </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Zap size={16} className="text-amber" />
+                    <span className="text-slate-light/70">Earn up to 50 XP</span>
+                  </div>
                 </div>
 
                 <div className="rounded-2xl bg-navy/40 border border-white/10 p-5 mb-6">
                   <h3 className="text-sm font-bold text-white mb-2">What you&apos;ll learn</h3>
                   <ul className="space-y-2 text-sm text-slate-light/70">
                     <li className="flex items-start gap-2">
-                      <Check size={14} className="text-emerald mt-0.5 flex-shrink-0" />
+                      <Check size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
                       <span>Core concepts and key vocabulary</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <Check size={14} className="text-emerald mt-0.5 flex-shrink-0" />
+                      <Check size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
                       <span>Interactive activities with Lumi</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <Check size={14} className="text-emerald mt-0.5 flex-shrink-0" />
+                      <Check size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
                       <span>Practice questions and challenges</span>
                     </li>
                   </ul>
@@ -282,7 +356,8 @@ export default function SubjectPage() {
 
                 <Link href={`/learn/${slug}/${selectedTopic.slug}`}>
                   <Button variant="primary" size="lg" className="w-full gap-2">
-                    Start with Lumi <ArrowLeft size={18} className="rotate-180" />
+                    {selectedStatus?.status === 'completed' ? 'Review with Lumi' : selectedStatus?.status === 'in_progress' ? 'Continue with Lumi' : 'Start with Lumi'}
+                    <ArrowLeft size={18} className="rotate-180" />
                   </Button>
                 </Link>
               </div>

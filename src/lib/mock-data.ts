@@ -1,4 +1,15 @@
-import { Subject, Topic, Child, LessonSession } from '@/types';
+import { Subject, Topic, Child, LessonSession, Achievement, ChildAchievement, Family, TopicStatus } from '@/types';
+
+export const MOCK_FAMILY: Family = {
+  id: 'family-1',
+  parent_user_id: 'parent-1',
+  family_name: 'The Smith Family',
+  subscription_tier: 'free',
+  stripe_customer_id: null,
+  subscription_status: 'none',
+  subscription_end_date: null,
+  created_at: '',
+};
 
 export const MOCK_SUBJECTS: Subject[] = [
   { id: '1', name: 'English', slug: 'english', icon_emoji: '📝', colour_hex: '#3B82F6', description: 'Reading, writing, speaking and storytelling', min_year: 1, max_year: 11, is_future_skill: false, created_at: '' },
@@ -71,47 +82,129 @@ export const MOCK_CHILD: Child = {
   created_at: '',
 };
 
-export const MOCK_SESSIONS: LessonSession[] = [
-  { id: 's1', child_id: 'child-1', topic_id: 't1', started_at: new Date(Date.now() - 3600000).toISOString(), ended_at: new Date(Date.now() - 2700000).toISOString(), xp_earned: 50, summary_text: 'Completed Letters and Sounds', created_at: '' },
-  { id: 's2', child_id: 'child-1', topic_id: 't6', started_at: new Date(Date.now() - 7200000).toISOString(), ended_at: new Date(Date.now() - 6300000).toISOString(), xp_earned: 45, summary_text: 'Completed Counting to 20', created_at: '' },
-  { id: 's3', child_id: 'child-1', topic_id: 't11', started_at: new Date(Date.now() - 86400000).toISOString(), ended_at: new Date(Date.now() - 85200000).toISOString(), xp_earned: 60, summary_text: 'Completed Plants and Growing', created_at: '' },
+export const MOCK_CHILDREN: Child[] = [
+  MOCK_CHILD,
+  {
+    id: 'child-2',
+    family_id: 'family-1',
+    name: 'Amelia',
+    age: 10,
+    year_group: 'Year 5',
+    avatar: 'unicorn',
+    learning_mode: 'full_homeschool',
+    pin_hash: '',
+    xp_total: 780,
+    streak_days: 3,
+    streak_last_date: new Date().toISOString().split('T')[0],
+    created_at: '',
+  },
 ];
 
+// Generate richer session data for the past 28 days
+function generateMockSessions(): LessonSession[] {
+  const sessions: LessonSession[] = [];
+  const now = Date.now();
+  const topicIds = ['t1', 't2', 't3', 't6', 't7', 't11', 't12', 't16', 't21'];
+  const summaries = [
+    'Explored phonics patterns and letter combinations',
+    'Practised reading three-letter words with confidence',
+    'Worked on letter formation and name writing',
+    'Counted objects up to 20 using different strategies',
+    'Added numbers using visual aids and number lines',
+    'Discovered how plants grow from seeds',
+    'Learned about animal habitats and food chains',
+    'Explored family history through timeline activities',
+    'Mapped the local area and identified key features',
+  ];
+
+  for (let day = 0; day < 28; day++) {
+    // 60% chance of activity on any given day
+    if (Math.random() > 0.6 && day > 0) continue;
+    const sessionsToday = day < 7 ? Math.ceil(Math.random() * 3) : Math.ceil(Math.random() * 2);
+    for (let s = 0; s < sessionsToday; s++) {
+      const hourOffset = 9 + Math.floor(Math.random() * 10); // 9am-7pm
+      const startMs = now - day * 86400000 + hourOffset * 3600000;
+      const durationMins = 10 + Math.floor(Math.random() * 15);
+      const idx = Math.floor(Math.random() * topicIds.length);
+      sessions.push({
+        id: `s-${day}-${s}`,
+        child_id: 'child-1',
+        topic_id: topicIds[idx],
+        started_at: new Date(startMs).toISOString(),
+        ended_at: new Date(startMs + durationMins * 60000).toISOString(),
+        duration_minutes: durationMins,
+        xp_earned: 15 + Math.floor(Math.random() * 50),
+        summary_text: summaries[idx],
+        created_at: new Date(startMs).toISOString(),
+      });
+    }
+  }
+  return sessions.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+}
+
+export const MOCK_SESSIONS: LessonSession[] = generateMockSessions();
+
 // Mock topic progress for demo
-export const MOCK_TOPIC_PROGRESS: Record<string, Record<string, 'locked' | 'available' | 'in_progress' | 'completed'>> = {
+export const MOCK_TOPIC_PROGRESS: Record<string, Record<string, { status: TopicStatus; mastery_score: number }>> = {
   english: {
-    'letters-and-sounds': 'completed',
-    'reading-simple-words': 'completed',
-    'writing-your-name': 'in_progress',
-    'story-time': 'available',
-    'sentence-building': 'locked',
+    'letters-and-sounds': { status: 'completed', mastery_score: 92 },
+    'reading-simple-words': { status: 'completed', mastery_score: 78 },
+    'writing-your-name': { status: 'in_progress', mastery_score: 45 },
+    'story-time': { status: 'available', mastery_score: 0 },
+    'sentence-building': { status: 'locked', mastery_score: 0 },
   },
   maths: {
-    'counting-to-20': 'completed',
-    'addition-basics': 'in_progress',
-    'subtraction-basics': 'available',
-    'shapes-around-us': 'locked',
-    'measuring-length': 'locked',
+    'counting-to-20': { status: 'completed', mastery_score: 88 },
+    'addition-basics': { status: 'in_progress', mastery_score: 35 },
+    'subtraction-basics': { status: 'available', mastery_score: 0 },
+    'shapes-around-us': { status: 'locked', mastery_score: 0 },
+    'measuring-length': { status: 'locked', mastery_score: 0 },
   },
   science: {
-    'plants-and-growing': 'completed',
-    'animals-and-habitats': 'available',
-    'materials-and-properties': 'locked',
-    'seasons-and-weather': 'locked',
-    'the-human-body': 'locked',
+    'plants-and-growing': { status: 'completed', mastery_score: 85 },
+    'animals-and-habitats': { status: 'in_progress', mastery_score: 20 },
+    'materials-and-properties': { status: 'locked', mastery_score: 0 },
+    'seasons-and-weather': { status: 'locked', mastery_score: 0 },
+    'the-human-body': { status: 'locked', mastery_score: 0 },
   },
   history: {
-    'my-family-history': 'available',
-    'famous-people': 'locked',
-    'great-fire-of-london': 'locked',
-    'toys-through-time': 'locked',
-    'castles-and-knights': 'locked',
+    'my-family-history': { status: 'completed', mastery_score: 75 },
+    'famous-people': { status: 'available', mastery_score: 0 },
+    'great-fire-of-london': { status: 'locked', mastery_score: 0 },
+    'toys-through-time': { status: 'locked', mastery_score: 0 },
+    'castles-and-knights': { status: 'locked', mastery_score: 0 },
   },
   geography: {
-    'my-local-area': 'available',
-    'maps-and-directions': 'locked',
-    'countries-of-the-uk': 'locked',
-    'hot-and-cold-places': 'locked',
-    'oceans-and-continents': 'locked',
+    'my-local-area': { status: 'available', mastery_score: 0 },
+    'maps-and-directions': { status: 'locked', mastery_score: 0 },
+    'countries-of-the-uk': { status: 'locked', mastery_score: 0 },
+    'hot-and-cold-places': { status: 'locked', mastery_score: 0 },
+    'oceans-and-continents': { status: 'locked', mastery_score: 0 },
   },
 };
+
+// Mock achievements data
+export const MOCK_ACHIEVEMENTS: Achievement[] = [
+  { id: 'a1', name: 'First Step', description: 'Complete your first lesson', icon_emoji: '🐣', xp_reward: 10, condition_type: 'lessons_completed', condition_value: 1, created_at: '' },
+  { id: 'a2', name: 'Subject Explorer', description: 'Try 3 different subjects', icon_emoji: '🌍', xp_reward: 15, condition_type: 'subjects_tried', condition_value: 3, created_at: '' },
+  { id: 'a3', name: 'Getting Started', description: 'Earn 50 XP total', icon_emoji: '⭐', xp_reward: 10, condition_type: 'xp_total', condition_value: 50, created_at: '' },
+  { id: 'a4', name: 'On a Roll', description: '3-day streak', icon_emoji: '🔥', xp_reward: 20, condition_type: 'streak_days', condition_value: 3, created_at: '' },
+  { id: 'a5', name: 'Unstoppable', description: '7-day streak', icon_emoji: '💪', xp_reward: 50, condition_type: 'streak_days', condition_value: 7, created_at: '' },
+  { id: 'a6', name: 'Legend', description: '30-day streak', icon_emoji: '🏆', xp_reward: 200, condition_type: 'streak_days', condition_value: 30, created_at: '' },
+  { id: 'a7', name: 'Deep Diver', description: 'Complete all topics in one subject', icon_emoji: '🤿', xp_reward: 75, condition_type: 'subject_completed', condition_value: 1, created_at: '' },
+  { id: 'a8', name: 'Renaissance Learner', description: 'Active in 5 different subjects', icon_emoji: '🎨', xp_reward: 50, condition_type: 'subjects_tried', condition_value: 5, created_at: '' },
+  { id: 'a9', name: 'Future Ready', description: 'Complete a Future Skills subject', icon_emoji: '🚀', xp_reward: 60, condition_type: 'future_skill_completed', condition_value: 1, created_at: '' },
+  { id: 'a10', name: 'Perseverance', description: 'Complete a topic after using hints 3+ times', icon_emoji: '🦁', xp_reward: 30, condition_type: 'perseverance', condition_value: 1, created_at: '' },
+  { id: 'a11', name: 'Marathon Learner', description: 'Accumulate 10 hours of learning', icon_emoji: '⏱️', xp_reward: 40, condition_type: 'total_hours', condition_value: 10, created_at: '' },
+  { id: 'a12', name: 'Night Owl', description: 'Complete a lesson after 7pm', icon_emoji: '🦉', xp_reward: 15, condition_type: 'night_session', condition_value: 1, created_at: '' },
+];
+
+// Oliver has earned some achievements
+export const MOCK_CHILD_ACHIEVEMENTS: ChildAchievement[] = [
+  { id: 'ca1', child_id: 'child-1', achievement_id: 'a1', earned_at: new Date(Date.now() - 86400000 * 20).toISOString() },
+  { id: 'ca2', child_id: 'child-1', achievement_id: 'a2', earned_at: new Date(Date.now() - 86400000 * 15).toISOString() },
+  { id: 'ca3', child_id: 'child-1', achievement_id: 'a3', earned_at: new Date(Date.now() - 86400000 * 18).toISOString() },
+  { id: 'ca4', child_id: 'child-1', achievement_id: 'a4', earned_at: new Date(Date.now() - 86400000 * 10).toISOString() },
+  { id: 'ca5', child_id: 'child-1', achievement_id: 'a5', earned_at: new Date(Date.now() - 86400000 * 3).toISOString() },
+  { id: 'ca6', child_id: 'child-1', achievement_id: 'a12', earned_at: new Date(Date.now() - 86400000 * 1).toISOString() },
+];

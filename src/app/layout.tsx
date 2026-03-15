@@ -1,10 +1,55 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Luminary — Learning That Lights Up Every Child',
-  description: 'AI-powered homeschooling platform for UK children aged 5-16. Personalised learning with Lumi, your child\'s AI tutor.',
-  keywords: ['homeschooling', 'UK', 'education', 'AI tutor', 'children', 'learning'],
+  title: {
+    default: 'Luminary — Learning That Lights Up Every Child',
+    template: '%s | Luminary',
+  },
+  description:
+    'AI-powered homeschooling platform for UK children aged 5-16. Personalised learning with Lumi, your child\'s AI tutor. Covers all 15 National Curriculum subjects.',
+  keywords: [
+    'homeschooling UK',
+    'home education',
+    'AI tutor',
+    'children learning',
+    'UK curriculum',
+    'personalised education',
+    'Lumi AI',
+    'Key Stage 1',
+    'Key Stage 2',
+    'Key Stage 3',
+    'GCSE preparation',
+  ],
+  authors: [{ name: 'Luminary Education' }],
+  creator: 'Luminary Education',
+  publisher: 'Luminary Education',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://luminary.education'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_GB',
+    url: '/',
+    siteName: 'Luminary',
+    title: 'Luminary — Learning That Lights Up Every Child',
+    description:
+      'AI-powered homeschooling for UK children aged 5-16. Personalised learning across 15 subjects with Lumi, your child\'s AI tutor.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Luminary — Learning That Lights Up Every Child',
+    description:
+      'AI-powered homeschooling for UK children aged 5-16. Personalised learning with Lumi AI.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#0a0e1a',
 };
 
 export default function RootLayout({

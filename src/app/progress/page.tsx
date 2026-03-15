@@ -14,11 +14,11 @@ export default function ProgressPage() {
     0
   );
   const completedTopics = Object.values(MOCK_TOPIC_PROGRESS).reduce(
-    (acc, topics) => acc + Object.values(topics).filter(s => s === 'completed').length,
+    (acc, topics) => acc + Object.values(topics).filter(s => s.status === 'completed').length,
     0
   );
   const inProgressTopics = Object.values(MOCK_TOPIC_PROGRESS).reduce(
-    (acc, topics) => acc + Object.values(topics).filter(s => s === 'in_progress').length,
+    (acc, topics) => acc + Object.values(topics).filter(s => s.status === 'in_progress').length,
     0
   );
 
@@ -85,7 +85,7 @@ export default function ProgressPage() {
           {MOCK_SUBJECTS.map((subject, i) => {
             const progress = MOCK_TOPIC_PROGRESS[subject.slug];
             const completed = progress
-              ? Object.values(progress).filter(s => s === 'completed').length
+              ? Object.values(progress).filter(s => s.status === 'completed').length
               : 0;
             const total = progress ? Object.keys(progress).length : 5;
             const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;

@@ -15,7 +15,7 @@ export default function LearnPage() {
   const getSubjectProgress = (slug: string) => {
     const progress = MOCK_TOPIC_PROGRESS[slug];
     if (!progress) return { completed: 0, total: 5 };
-    const completed = Object.values(progress).filter(s => s === 'completed').length;
+    const completed = Object.values(progress).filter(s => s.status === 'completed').length;
     return { completed, total: Object.keys(progress).length };
   };
 
