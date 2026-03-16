@@ -1,16 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Starfield from '@/components/ui/Starfield';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { ArrowRight, ArrowLeft, User } from 'lucide-react';
+import { ArrowRight, ArrowLeft, User, Shield } from 'lucide-react';
 import { AVATAR_EMOJI_MAP, Avatar } from '@/types';
 
 type LoginStep = 'email' | 'select-child' | 'pin' | 'parent-password';
+
+type LoginType = 'child' | 'parent' | 'admin';
+
+const ADMIN_TEST_EMAIL = 'steveallan2018@gmail.com';
 
 // Mock children for demo
 const mockChildren = [
@@ -20,21 +24,32 @@ const mockChildren = [
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedChild, setSelectedChild] = useState<typeof mockChildren[0] | null>(null);
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loginType, setLoginType] = useState<'child' | 'parent'>('child');
+  const [loginType, setLoginType] = useState<LoginType>('child');
+  const [error, setError] = useState('');
+  const modeParam = searchParams.get('mode');
+
+  useEffect(() => {
+    if (modeParam === 'admin') {
+      setLoginType('admin');
+      setEmail((current) => current || ADMIN_TEST_EMAIL);
+    }
+  }, [modeParam]);
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (loginType === 'child') {
       setStep('select-child');
-    } else {
-      setStep('parent-password');
+      return;
     }
+    setStep('parent-password');
   };
 
   const handleChildSelect = (child: typeof mockChildren[0]) => {
@@ -62,8 +77,32 @@ export default function LoginPage() {
   const handleParentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    router.push('/parent');
+    setError('');
+
+    try {
+      if (loginType === 'admin') {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({ error: 'Admin login failed.' }));
+          setError(data.error || 'Admin login failed.');
+          setLoading(false);
+          return;
+        }
+
+        router.push('/admin/content');
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 800));
+      router.push('/parent');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -108,10 +147,10 @@ export default function LoginPage() {
               <p className="text-slate-light/70 text-center mb-6">Who&apos;s logging in today?</p>
 
               {/* Login type toggle */}
-              <div className="flex rounded-2xl bg-navy/60 p-1 mb-6">
+              <div className="grid grid-cols-3 rounded-2xl bg-navy/60 p-1 mb-6 gap-1">
                 <button
-                  onClick={() => setLoginType('child')}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  onClick={() => { setLoginType('child'); setError(''); }}
+                  className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
                     loginType === 'child'
                       ? 'bg-amber text-navy'
                       : 'text-slate-light hover:text-white'
@@ -120,8 +159,8 @@ export default function LoginPage() {
                   I&apos;m a Learner
                 </button>
                 <button
-                  onClick={() => setLoginType('parent')}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  onClick={() => { setLoginType('parent'); setError(''); }}
+                  className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
                     loginType === 'parent'
                       ? 'bg-amber text-navy'
                       : 'text-slate-light hover:text-white'
@@ -129,13 +168,29 @@ export default function LoginPage() {
                 >
                   I&apos;m a Parent
                 </button>
+                <button
+                  onClick={() => { setLoginType('admin'); setError(''); setEmail(ADMIN_TEST_EMAIL); }}
+                  className={`py-2.5 rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+                    loginType === 'admin'
+                      ? 'bg-amber text-navy'
+                      : 'text-slate-light hover:text-white'
+                  }`}
+                >
+                  <Shield size={14} /> Admin
+                </button>
               </div>
+
+              {loginType === 'admin' && (
+                <div className="mb-5 rounded-2xl border border-amber/20 bg-amber/10 px-4 py-3 text-sm text-amber-light">
+                  Admin testing is enabled for <span className="font-bold text-white">{ADMIN_TEST_EMAIL}</span>.
+                </div>
+              )}
 
               <form onSubmit={handleEmailSubmit} className="space-y-5">
                 <Input
-                  label="Parent&apos;s Email"
+                  label={loginType === 'admin' ? 'Admin Email' : 'Parent\'s Email'}
                   type="email"
-                  placeholder="parent@example.com"
+                  placeholder={loginType === 'admin' ? ADMIN_TEST_EMAIL : 'parent@example.com'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -301,26 +356,33 @@ export default function LoginPage() {
               >
                 Parent Login
               </h2>
-              <p className="text-slate-light/70 text-center mb-6">Enter your password to continue</p>
+              <p className="text-slate-light/70 text-center mb-6">{loginType === 'admin' ? 'Use your allowlisted admin email to enter the admin area.' : 'Enter your password to continue'}</p>
 
               <form onSubmit={handleParentLogin} className="space-y-5">
-                <Input
-                  label="Password"
-                  type="password"
-                  placeholder="Your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                {loginType !== 'admin' && (
+                  <Input
+                    label="Password"
+                    type="password"
+                    placeholder="Your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                )}
+                {error && (
+                  <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    {error}
+                  </div>
+                )}
                 <Button type="submit" variant="primary" size="lg" className="w-full gap-2" disabled={loading}>
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <span className="w-4 h-4 border-2 border-navy border-t-transparent rounded-full animate-spin" />
-                      Signing in...
+                      {loginType === 'admin' ? 'Opening admin...' : 'Signing in...'}
                     </span>
                   ) : (
                     <>
-                      Sign In <ArrowRight size={18} />
+                      {loginType === 'admin' ? 'Enter Admin' : 'Sign In'} <ArrowRight size={18} />
                     </>
                   )}
                 </Button>
