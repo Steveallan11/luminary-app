@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM } from '@/lib/mock-content';
-import ContentRenderer from '@/components/content/ContentRenderer';
+import AdminAssetPreview from '@/components/admin/AdminAssetPreview';
 import { TopicAsset, AssetType, Topic } from '@/types';
 
 const ALL_TOPICS: Topic[] = Object.values(MOCK_TOPICS).flat();
@@ -35,18 +35,6 @@ const ASSET_TYPES: { type: AssetType; label: string; icon: React.ReactNode; colo
   { type: 'worksheet', label: 'Worksheet', icon: <FileText size={14} />, colour: '#6366F1' },
   { type: 'check_questions', label: 'Check Qs', icon: <Check size={14} />, colour: '#14B8A6' },
 ];
-
-function getPreviewType(asset: TopicAsset) {
-  if (asset.asset_type === 'realworld_card') {
-    return asset.asset_subtype === 'inspiring' ? 'realworld_inspiring' : 'realworld_everyday';
-  }
-
-  if (asset.asset_type === 'game_questions') {
-    return 'game';
-  }
-
-  return asset.asset_type;
-}
 
 export default function AdminContentPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'generate' | 'review'>('dashboard');
@@ -80,10 +68,6 @@ export default function AdminContentPage() {
     return MOCK_SUBJECTS.find((subject) => subject.id === reviewTopic.subject_id) ?? null;
   }, [reviewTopic]);
 
-  const previewAssets = useMemo(() => {
-    if (!reviewAsset) return [];
-    return [reviewAsset];
-  }, [reviewAsset]);
 
   const handleGenerate = async () => {
     if (!generateTopicId || generateTypes.length === 0) return;
@@ -449,13 +433,10 @@ export default function AdminContentPage() {
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-navy/50 p-4">
-                      <ContentRenderer
-                        contentType={getPreviewType(reviewAsset)}
-                        contentId={reviewAsset.id}
-                        assets={previewAssets}
+                      <AdminAssetPreview
+                        asset={reviewAsset}
                         diagrams={[MOCK_FRACTION_BAR_DIAGRAM]}
                         subjectColour={reviewSubject?.colour_hex ?? '#8B5CF6'}
-                        childAge={9}
                       />
                     </div>
                   </div>
