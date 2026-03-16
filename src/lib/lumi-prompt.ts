@@ -3,7 +3,10 @@
  *
  * Generates a fully personalised system prompt for the Lumi AI tutor
  * based on the child's profile, subject, topic, and learning context.
+ * Session 4: Now includes content manifest injection and [CONTENT:*] signal instructions.
  */
+
+import { ContentManifest } from '@/types';
 
 export interface LumiPromptParams {
   child_name: string;
@@ -13,6 +16,8 @@ export interface LumiPromptParams {
   topic_description: string;
   previous_struggles: string[];
   mastery_score: number;
+  content_manifest?: ContentManifest;
+  game_results?: { game_type: string; score: number; max_score: number }[];
 }
 
 function getAgeCalibration(age: number): {
@@ -25,7 +30,7 @@ function getAgeCalibration(age: number): {
     return {
       vocabulary: `Use very simple words that a ${age}-year-old would know. Think picture-book language.`,
       sentences: 'Keep sentences very short and punchy — no more than 8-10 words each. Everything should feel like a fun adventure or story.',
-      emojis: 'Use lots of emojis freely! Stars ⭐, sparkles ✨, thumbs up 👍, party 🎉 — make it feel exciting and visual.',
+      emojis: 'Use lots of emojis freely! Stars, sparkles, thumbs up, party — make it feel exciting and visual.',
       ageRange: '5-7',
     };
   } else if (age <= 11) {
@@ -52,6 +57,93 @@ function getAgeCalibration(age: number): {
   }
 }
 
+function buildContentManifestSection(manifest: ContentManifest): string {
+  const lines: string[] = [];
+  lines.push('═══ AVAILABLE CONTENT FOR THIS TOPIC ═══');
+  lines.push('');
+  lines.push('You have access to the following rich content. Use [CONTENT:type:id] signals to display them at the right moment in the lesson.');
+  lines.push('The frontend will intercept these signals and render the content inline in the chat.');
+  lines.push('');
+
+  if (manifest.concept_card) {
+    lines.push(`- Concept Card: "${manifest.concept_card.title}" → Signal: [CONTENT:concept_card:${manifest.concept_card.id}]`);
+    lines.push('  Show this FIRST to introduce the core concept before any discussion.');
+  }
+  if (manifest.video) {
+    lines.push(`- Video: "${manifest.video.title}" → Signal: [CONTENT:video:${manifest.video.id}]`);
+    lines.push('  Show this after the concept card to reinforce understanding visually.');
+  }
+  if (manifest.diagram) {
+    lines.push(`- Interactive Diagram (${manifest.diagram.diagram_type}): "${manifest.diagram.title}" → Signal: [CONTENT:diagram:${manifest.diagram.id}]`);
+    lines.push('  Show this when the child needs to explore the concept hands-on.');
+  }
+  if (manifest.realworld_everyday) {
+    lines.push(`- Real-World (Everyday): "${manifest.realworld_everyday.title}" → Signal: [CONTENT:realworld_everyday:${manifest.realworld_everyday.id}]`);
+    lines.push('  Show this to connect the concept to daily life.');
+  }
+  if (manifest.realworld_inspiring) {
+    lines.push(`- Real-World (Inspiring): "${manifest.realworld_inspiring.title}" → Signal: [CONTENT:realworld_inspiring:${manifest.realworld_inspiring.id}]`);
+    lines.push('  Show this to inspire and amaze — connect to big ideas.');
+  }
+  if (manifest.game) {
+    lines.push(`- Game (${manifest.game.game_type}): "${manifest.game.title}" → Signal: [CONTENT:game:${manifest.game.id}]`);
+    lines.push('  Show this during the practice phase to test understanding interactively.');
+  }
+  if (manifest.worksheet) {
+    lines.push(`- Worksheet: "${manifest.worksheet.title}" → Signal: [CONTENT:worksheet:${manifest.worksheet.id}]`);
+    lines.push('  Offer this near the end for offline practice.');
+  }
+  if (manifest.check_questions) {
+    lines.push(`- Check Questions: "${manifest.check_questions.title}" → Signal: [CONTENT:check_questions:${manifest.check_questions.id}]`);
+    lines.push('  Use these for the final mastery check.');
+  }
+
+  lines.push('');
+  lines.push('═══ LESSON FLOW WITH CONTENT ═══');
+  lines.push('');
+  lines.push('Follow this natural teaching flow, inserting content signals at the right moments:');
+  lines.push('');
+  lines.push('1. HOOK (first message): Start with an engaging question or scenario');
+  lines.push('2. CONCEPT (after initial discussion): Show the concept card → [CONTENT:concept_card:id]');
+  lines.push('3. EXPLORE (after concept): Show video or diagram for deeper understanding');
+  lines.push('4. CONNECT (mid-lesson): Show real-world cards to make it relevant');
+  lines.push('5. PRACTICE (when ready): Launch a game → [CONTENT:game:id]');
+  lines.push('6. REFLECT (after game): Discuss what they learned, offer worksheet');
+  lines.push('');
+  lines.push('IMPORTANT RULES FOR CONTENT SIGNALS:');
+  lines.push('- Place each [CONTENT:*] signal on its own line, with no other text on that line');
+  lines.push('- Only use each content signal ONCE per session');
+  lines.push('- Always introduce the content with a sentence before the signal');
+  lines.push('- After showing content, wait for the child to respond before continuing');
+  lines.push('- If the child asks to play a game, show the game signal');
+  lines.push('- If no content is available for a type, teach conversationally instead');
+
+  return lines.join('\n');
+}
+
+function buildGameResultsSection(results: { game_type: string; score: number; max_score: number }[]): string {
+  if (!results || results.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('═══ GAME RESULTS FROM THIS SESSION ═══');
+  lines.push('');
+
+  for (const r of results) {
+    const pct = Math.round((r.score / r.max_score) * 100);
+    const gameLabel = r.game_type.replace('_', ' ');
+    lines.push(`- ${gameLabel}: ${pct}% (${r.score}/${r.max_score})`);
+  }
+
+  lines.push('');
+  lines.push('Use these results to guide your next response:');
+  lines.push('- If score >= 80%: Celebrate and move to the next phase');
+  lines.push('- If score 50-79%: Encourage and revisit the tricky parts');
+  lines.push('- If score < 50%: Be extra supportive, re-explain the concept differently');
+
+  return lines.join('\n');
+}
+
 export function generateLumiSystemPrompt(params: LumiPromptParams): string {
   const {
     child_name,
@@ -61,6 +153,8 @@ export function generateLumiSystemPrompt(params: LumiPromptParams): string {
     topic_description,
     previous_struggles,
     mastery_score,
+    content_manifest,
+    game_results,
   } = params;
 
   const cal = getAgeCalibration(child_age);
@@ -69,6 +163,14 @@ export function generateLumiSystemPrompt(params: LumiPromptParams): string {
     previous_struggles.length > 0
       ? previous_struggles.join(', ')
       : 'None recorded yet';
+
+  const contentSection = content_manifest
+    ? '\n\n' + buildContentManifestSection(content_manifest)
+    : '';
+
+  const gameResultsSection = game_results
+    ? buildGameResultsSection(game_results)
+    : '';
 
   return `You are Lumi, a warm and brilliant learning companion for ${child_name}, who is ${child_age} years old. You are their personal tutor for ${subject_name}, and right now you're exploring the topic: ${topic_title}.
 
@@ -97,6 +199,7 @@ Your teaching approach:
 ═══ PRIOR CONTEXT ═══
 
 Things ${child_name} has found challenging before: ${strugglesText}. Be especially patient and encouraging if these come up. Their current mastery score for this topic: ${mastery_score}/100.
+${contentSection}${gameResultsSection}
 
 ═══ CHILD SAFETY (NON-NEGOTIABLE) ═══
 
@@ -115,7 +218,8 @@ Format your responses as follows:
 - End most responses with an engaging question to keep the dialogue going
 - Use line breaks generously — never send a wall of text
 - For ages under 10: use shorter responses, more visual formatting with line breaks
-- Never use markdown headers (##) — this is a chat interface, not a document`;
+- Never use markdown headers (##) — this is a chat interface, not a document
+- When including a [CONTENT:*] signal, place it on its own line with no other text`;
 }
 
 /**

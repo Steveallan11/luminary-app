@@ -4,6 +4,17 @@ export type TopicStatus = 'locked' | 'available' | 'in_progress' | 'completed';
 export type SubscriptionTier = 'free' | 'family' | 'pro';
 export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trialing' | 'none';
 
+// Session 4: Content asset types
+export type AssetType = 'concept_card' | 'video' | 'diagram' | 'realworld_card' | 'worksheet' | 'game_questions' | 'check_questions';
+export type AssetSubtype =
+  | 'match_it' | 'sort_it' | 'fill_it' | 'true_false' | 'build_it' | 'quick_fire'
+  | 'everyday' | 'inspiring'
+  | 'fraction_bar' | 'timeline' | 'labelled' | 'map' | 'sorting' | 'number_line';
+export type GameType = 'match_it' | 'sort_it' | 'fill_it' | 'true_false' | 'build_it' | 'quick_fire';
+export type DiagramType = 'fraction_bar' | 'timeline' | 'labelled_diagram' | 'sorting_visual' | 'number_line';
+export type AssetStatus = 'draft' | 'published' | 'archived';
+export type AgeGroup = '5-7' | '8-11' | '12-14' | '15-16' | 'all';
+
 export interface Family {
   id: string;
   parent_user_id: string;
@@ -94,6 +105,193 @@ export interface ChildAchievement {
   achievement_id: string;
   earned_at: string;
   achievement?: Achievement;
+}
+
+// Session 4: Content types
+export interface TopicAsset {
+  id: string;
+  topic_id: string;
+  asset_type: AssetType;
+  asset_subtype: AssetSubtype | null;
+  title: string;
+  content_json: Record<string, unknown>;
+  file_url: string | null;
+  thumbnail_url: string | null;
+  age_group: AgeGroup;
+  status: AssetStatus;
+  generation_prompt: string | null;
+  generated_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiagramComponent {
+  id: string;
+  diagram_type: DiagramType;
+  topic_id: string;
+  title: string;
+  data_json: Record<string, unknown>;
+  config_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface GameSession {
+  id: string;
+  lesson_session_id: string;
+  child_id: string;
+  topic_asset_id: string;
+  game_type: GameType;
+  score: number;
+  max_score: number;
+  time_taken_seconds: number;
+  answers_json: GameAnswer[];
+  completed_at: string;
+  xp_earned: number;
+  created_at: string;
+}
+
+export interface GameAnswer {
+  question_id: string;
+  child_answer: string;
+  correct_answer: string;
+  is_correct: boolean;
+  time_taken: number;
+}
+
+// Game data structures
+export interface MatchItData {
+  pairs: { id: string; left: string; right: string; explanation: string }[];
+}
+
+export interface SortItData {
+  categories: { id: string; name: string; colour: string }[];
+  items: { id: string; text: string; correct_category: string; explanation: string }[];
+}
+
+export interface FillItData {
+  questions: {
+    id: string;
+    template: string;
+    blanks: { position: number; answer: string; hint: string }[];
+    context?: string;
+  }[];
+}
+
+export interface TrueFalseData {
+  statements: { id: string; statement: string; is_true: boolean; explanation: string }[];
+}
+
+export interface BuildItData {
+  title: string;
+  type: 'sequence' | 'timeline' | 'sentence';
+  items: { id: string; content: string; correct_position: number }[];
+}
+
+export interface QuickFireData {
+  questions: {
+    id: string;
+    question: string;
+    options: string[];
+    correct: string;
+    explanation: string;
+  }[];
+  time_limit: number;
+  question_count: number;
+}
+
+// Diagram data structures
+export interface FractionBarData {
+  show_notation: boolean;
+  max_denominator: number;
+  allow_comparison: boolean;
+  initial_denominator?: number;
+}
+
+export interface TimelineData {
+  events: {
+    id: string;
+    date: string;
+    title: string;
+    description: string;
+    image_url?: string;
+  }[];
+  eras?: { name: string; start: string; end: string; colour: string }[];
+  is_ordering_exercise: boolean;
+}
+
+export interface LabelledDiagramData {
+  image_url: string;
+  hotspots: {
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    label: string;
+    description: string;
+  }[];
+}
+
+export interface SortingVisualData {
+  groups: { id: string; name: string; colour: string }[];
+  items: { id: string; text: string; initial_group?: string }[];
+}
+
+export interface NumberLineData {
+  min: number;
+  max: number;
+  step: number;
+  show_fractions: boolean;
+  show_decimals: boolean;
+  markers?: { value: number; label: string }[];
+  allow_placement: boolean;
+}
+
+// Worksheet data structure
+export interface WorksheetData {
+  age_group: AgeGroup;
+  subject: string;
+  topic: string;
+  recall_questions: { q: string; lines: number }[];
+  apply_questions: { q: string; lines: number; show_working_space: boolean }[];
+  create_task: { title: string; description: string; space_type: string; lines: number };
+  reflect_prompts: string[];
+}
+
+// Game component props
+export interface GameProps {
+  asset: TopicAsset;
+  childAge: number;
+  subjectColour: string;
+  onComplete: (result: GameResult) => void;
+}
+
+export interface GameResult {
+  score: number;
+  maxScore: number;
+  timeTaken: number;
+  answersJson: GameAnswer[];
+  xpEarned: number;
+}
+
+// Diagram component props
+export interface DiagramProps {
+  diagram: DiagramComponent;
+  subjectColour: string;
+  onComplete?: () => void;
+}
+
+// Content manifest for Lumi
+export interface ContentManifest {
+  concept_card?: { id: string; title: string };
+  video?: { id: string; title: string };
+  diagram?: { id: string; title: string; diagram_type: DiagramType };
+  realworld_everyday?: { id: string; title: string };
+  realworld_inspiring?: { id: string; title: string };
+  game?: { id: string; title: string; game_type: GameType };
+  worksheet?: { id: string; title: string };
+  check_questions?: { id: string; title: string };
 }
 
 // XP Level System

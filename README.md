@@ -6,8 +6,9 @@ An AI-powered homeschooling platform for UK children aged 5–16. Built with Nex
 
 Luminary provides two user experiences:
 
-- **Child**: An immersive, cosmic-themed learning universe with 15 subjects, visual learning maps, XP tracking, streaks, achievements, and a personalised AI tutor called Lumi
+- **Child**: An immersive, cosmic-themed learning universe with 15 subjects, visual learning maps, XP tracking, streaks, achievements, interactive games, diagrams, and a personalised AI tutor called Lumi
 - **Parent**: A clean, data-rich dashboard for monitoring progress, managing child profiles, downloading reports, and managing subscriptions
+- **Admin**: Content production tools for generating and managing educational assets at scale
 
 ## Tech Stack
 
@@ -18,8 +19,10 @@ Luminary provides two user experiences:
 | Tailwind CSS v4 | Styling |
 | Framer Motion | Animations |
 | Lucide React | Icons |
-| Anthropic Claude API | AI Tutor (Lumi) |
+| Anthropic Claude API | AI Tutor (Lumi) + Content Generation |
+| OpenAI DALL-E 3 | Image Generation |
 | Stripe | Subscription payments |
+| jsPDF | Worksheet PDF generation |
 | Google Fonts | Nunito, Fraunces, JetBrains Mono |
 
 ## Getting Started
@@ -30,6 +33,7 @@ Luminary provides two user experiences:
 - pnpm
 - Supabase project
 - Anthropic API key
+- OpenAI API key (for image generation)
 - Stripe account (for payments)
 
 ### Installation
@@ -55,6 +59,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
+OPENAI_API_KEY=your-openai-api-key
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 NEXT_PUBLIC_STRIPE_FAMILY_PRICE_ID=price_xxx
@@ -64,7 +69,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ### Database Setup
 
-Run the SQL schemas in your Supabase SQL editor:
+Run the SQL schemas in your Supabase SQL editor in order:
 
 ```bash
 # 1. Run the base schema
@@ -72,9 +77,12 @@ Run the SQL schemas in your Supabase SQL editor:
 
 # 2. Run the Session 3 additions
 # Copy contents of supabase-schema-session3.sql into Supabase SQL Editor
+
+# 3. Run the Session 4 additions (content system)
+# Copy contents of supabase-schema-session4.sql into Supabase SQL Editor
 ```
 
-This creates all tables, RLS policies, seeds 15 subjects with sample topics, achievements, and subscription support.
+This creates all tables, RLS policies, seeds 15 subjects with sample topics, achievements, content assets, and subscription support.
 
 ### Development
 
@@ -101,12 +109,14 @@ pnpm start
 | `/auth/onboarding` | Add first child (name, age, year group, avatar, PIN) |
 | `/learn` | Child home — Learning Universe with 15 subject cards |
 | `/learn/[slug]` | Subject page with data-driven learning map and sequential unlock |
-| `/learn/[slug]/[topic]` | **Full AI lesson** — Streaming chat with Lumi |
+| `/learn/[slug]/[topic]` | **Full AI lesson** — Streaming chat with Lumi + interactive content |
 | `/parent` | Parent dashboard with live stats, heatmap, activity feed |
 | `/progress` | Child's progress overview across all subjects |
 | `/achievements` | 12 achievement badges with earned/locked states and confetti |
 | `/profile` | Child profile with avatar, XP, streak |
 | `/pricing` | Subscription pricing page (Free, Family, Pro tiers) |
+| `/demo` | **Interactive demo** — Explore all 6 game types, diagrams, content cards |
+| `/admin/content` | Admin content dashboard with asset coverage and AI generator |
 
 ## API Routes
 
@@ -118,6 +128,10 @@ pnpm start
 | `/api/reports/generate` | GET | Generates HTML progress report for Local Authority |
 | `/api/stripe/checkout` | POST | Creates Stripe checkout session for subscription |
 | `/api/stripe/webhook` | POST | Handles Stripe webhook events |
+| `/api/content/game-result` | POST | Records game result and calculates XP |
+| `/api/content/generate-worksheet` | GET | Generates printable worksheet PDF |
+| `/api/admin/generate-content` | POST | AI batch content generation for topics |
+| `/api/admin/generate-images` | POST | DALL-E 3 image generation for content assets |
 
 ## Lumi — The AI Tutor
 
@@ -129,15 +143,30 @@ Lumi is not a chatbot. Lumi is a warm, curious, personalised learning companion 
 - **Celebrates effort** as much as correct answers
 - **Includes child safety guardrails** — stays on educational topics, redirects off-topic conversations
 - **Streams responses** word-by-word for a natural, alive feeling
+- **Triggers interactive content** via `[CONTENT:*]` signals in chat
 
 ### Lesson Flow
 
 1. Child opens a topic → Lumi auto-generates a warm opening message
 2. Lumi assesses what the child already knows with an open question
 3. Interactive Socratic dialogue with streaming responses
-4. "I'm stuck" hint button provides scaffolded hints without giving answers
-5. Session ends after 20 minutes or when child clicks "Finish"
-6. Session summary screen shows XP earned, mastery score, and topic status
+4. Lumi triggers games, diagrams, concept cards, and videos at appropriate moments
+5. "I'm stuck" hint button provides scaffolded hints without giving answers
+6. Session ends after 20 minutes or when child clicks "Finish"
+7. Session summary screen shows XP earned, mastery score, and topic status
+
+### Content Signals
+
+Lumi can trigger interactive content during lessons by emitting signals:
+
+| Signal | Triggers |
+|---|---|
+| `[CONTENT:CONCEPT_CARD]` | Concept card with definition, hook question, image |
+| `[CONTENT:VIDEO]` | Video player with custom controls |
+| `[CONTENT:DIAGRAM]` | Interactive diagram (fraction bar, number line, etc.) |
+| `[CONTENT:GAME]` | Mini-game (match, sort, fill, true/false, build, quick fire) |
+| `[CONTENT:REALWORLD]` | Real-world application card |
+| `[CONTENT:WORKSHEET]` | Printable worksheet link |
 
 ### Mastery Scoring
 
@@ -148,6 +177,55 @@ Lumi is not a chatbot. Lumi is a warm, curious, personalised learning companion 
 | Hint used | -2 |
 | Session completed | +15 |
 | Topic mastery threshold | 70/100 |
+
+## Interactive Content System (Session 4)
+
+### 6 Mini-Game Types
+
+| Game | Description | Interaction |
+|---|---|---|
+| **Match It** | Connect matching pairs | Tap left + right columns |
+| **Sort It** | Categorise items into groups | Drag/tap items into category buckets |
+| **Fill It** | Complete sentences with blanks | Type answers with hints available |
+| **True / False** | Judge statements | Swipe or tap True/False buttons |
+| **Build It** | Order steps/items correctly | Drag to reorder sequence |
+| **Quick Fire** | Timed multiple choice | Select answer within time limit |
+
+All games feature:
+- Animated feedback (correct/wrong)
+- Progress bar
+- Results screen with score, XP, time, and wrong answer review
+- Subject-themed colours
+
+### 5 Interactive Diagram Types
+
+| Diagram | Description |
+|---|---|
+| **Fraction Bar** | Interactive fraction explorer with adjustable denominators and comparison mode |
+| **Number Line** | Zoomable number line with fraction/decimal markers and placement mode |
+| **Timeline** | Historical timeline with era bands and optional ordering exercise |
+| **Labelled Diagram** | Image with discoverable hotspots that reveal labels and descriptions |
+| **Sorting Visual** | Visual sorting exercise with draggable items into groups |
+
+### Content Cards
+
+- **Concept Card**: Definition, hook question, tagline — flippable card with front/back
+- **Real-World Card**: Everyday or inspiring real-world application scenarios
+- **Video Player**: Custom-styled player with progress bar, volume, fullscreen
+
+### Worksheet Generator
+
+- Generates printable PDF worksheets via `/api/content/generate-worksheet`
+- Sections: Recall, Apply, Create, Reflect
+- Age-adapted question complexity
+- Working space and lined areas
+
+### Admin Content Dashboard
+
+- Asset coverage overview across all topics
+- Subject filter and topic-level asset matrix
+- AI batch content generator (select topic + asset types → Claude generates)
+- DALL-E 3 image generation for visual assets
 
 ## Gamification System
 
@@ -178,6 +256,7 @@ First Step, Subject Explorer, Getting Started, On a Roll, Unstoppable, Legend, D
 
 ## Database Schema
 
+### Base Tables
 - `families` — Parent accounts, family names, subscription info
 - `children` — Child profiles with avatar, year group, PIN, XP, streaks
 - `subjects` — 15 seeded subjects (9 traditional + 6 future skills)
@@ -187,8 +266,55 @@ First Step, Subject Explorer, Getting Started, On a Roll, Unstoppable, Legend, D
 - `achievements` — 12 achievement definitions with criteria
 - `child_achievements` — Per-child achievement unlock records
 
-## Session 1 Deliverables
+### Content Tables (Session 4)
+- `topic_assets` — All content assets (concept cards, videos, games, diagrams, worksheets)
+- `diagram_components` — Interactive diagram configurations and data
+- `game_sessions` — Individual game play records with scores and answers
 
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── admin/content/     # Admin content dashboard
+│   ├── api/
+│   │   ├── admin/         # generate-content, generate-images
+│   │   ├── content/       # game-result, generate-worksheet
+│   │   ├── lumi/          # chat, opening-message, session-end
+│   │   ├── reports/       # generate
+│   │   └── stripe/        # checkout, webhook
+│   ├── achievements/      # Achievements page
+│   ├── auth/              # signup, login, onboarding
+│   ├── demo/              # Interactive content demo
+│   ├── learn/             # Child learning pages
+│   ├── parent/            # Parent dashboard
+│   ├── pricing/           # Subscription pricing
+│   ├── profile/           # Child profile
+│   └── progress/          # Progress overview
+├── components/
+│   ├── content/           # VideoPlayer, ConceptCard, RealWorldCard, ContentRenderer
+│   ├── diagrams/          # FractionBar, Timeline, LabelledDiagram, SortingVisual, NumberLine, DiagramRenderer
+│   ├── games/             # MatchIt, SortIt, FillIt, TrueFalse, BuildIt, QuickFire, GameWrapper, GameResults, GameRenderer
+│   ├── layout/            # ChildNav, ParentNav, ChildLayout
+│   └── ui/                # Button, Card, Input, Skeleton, EmptyState, ErrorState, UpgradeModal, Starfield
+├── lib/
+│   ├── achievements.ts    # Achievement checker
+│   ├── anthropic.ts       # Anthropic client
+│   ├── lumi-prompt.ts     # Dynamic system prompt with content manifest
+│   ├── mastery.ts         # Mastery scoring
+│   ├── mock-content.ts    # Demo content data
+│   ├── mock-data.ts       # Demo user/subject data
+│   ├── stripe.ts          # Stripe client
+│   ├── supabase.ts        # Supabase browser client
+│   ├── supabase-server.ts # Supabase server client
+│   └── utils.ts           # Utility helpers
+└── types/
+    └── index.ts           # All TypeScript types
+```
+
+## Session Deliverables
+
+### Session 1: Foundation
 - Complete Next.js project with all pages
 - Supabase integration with all tables, RLS policies, and seed data
 - Full authentication flow (parent signup, child PIN login)
@@ -198,40 +324,45 @@ First Step, Subject Explorer, Getting Started, On a Roll, Unstoppable, Legend, D
 - Parent dashboard with placeholder data
 - Responsive layout across all pages
 
-## Session 2 Deliverables
-
+### Session 2: AI Tutor
 - Dynamic system prompt generator with age-calibrated language
 - 3 API routes with Anthropic Claude integration
 - Streaming chat interface on the lesson page
 - Lumi auto-opening message on lesson load
 - Hint system ("I'm stuck" button with scaffolded hints)
 - Session end screen with XP calculation and mastery scoring
-- Supabase update logic for progress, XP, and streaks
 - Child-safe guardrails in system prompt
 - Typing indicator and smooth streaming UX
-- Session summary generation via Claude
 
-## Session 3 Deliverables
+### Session 3: Data & Monetisation
+- Gamification engine: 12 achievements, 5 XP levels, achievement checker
+- Real parent dashboard: live data, child selector, heatmap, activity feed
+- PDF progress report with AI narrative for Local Authority
+- Live learning map with mastery scores and sequential unlock
+- Stripe subscriptions: pricing page, checkout, webhook, upgrade modal
+- Loading skeletons, error/empty states, SEO, production polish
 
-- **Gamification engine**: 12 achievements, 5 XP levels, achievement checker utility
-- **Achievements page**: Full badge grid with earned/locked states, confetti on new unlocks, XP level progress bar
-- **Real parent dashboard**: Live data from mock sessions, child selector, subject progress grid with animated bars, weekly heatmap, streak display, paginated activity feed
-- **PDF progress report**: HTML report generator with AI narrative for Local Authority submissions, print/save-as-PDF support, learner info, subject progress table
-- **Live learning map**: Data-driven topic status with mastery scores, sequential unlock progression, animated connection lines, in-progress mastery bar
-- **Stripe subscriptions**: Pricing page with 3 tiers (Free/Family/Pro), checkout API, webhook handler, upgrade modal for free tier enforcement
-- **Loading skeletons**: Skeleton components for subjects, dashboard, and chat
-- **Error/empty states**: Global error page, 404 "Lost in Space" page, empty state component for no-activity/no-achievements
-- **SEO**: Enhanced metadata with Open Graph, sitemap.xml, robots.txt
-- **Production polish**: Shimmer animations, focus rings for accessibility, custom scrollbar, global loading spinner
+### Session 4: Rich Content System
+- **6 mini-game components**: MatchIt, SortIt, FillIt, TrueFalse, BuildIt, QuickFire
+- **5 interactive diagram components**: FractionBar, NumberLine, Timeline, LabelledDiagram, SortingVisual
+- **Content rendering**: VideoPlayer, ConceptCard, RealWorldCard, ContentRenderer
+- **Worksheet PDF generator**: Age-adapted printable worksheets with recall/apply/create/reflect sections
+- **Lumi content integration**: Updated system prompt with content manifest, `[CONTENT:*]` signal processing
+- **Admin content dashboard**: Asset coverage matrix, AI batch content generator, DALL-E 3 image generation
+- **4 new API routes**: game-result, generate-worksheet, generate-content, generate-images
+- **Interactive demo page**: `/demo` showcasing all game types, diagrams, and content cards
+- **3 new database tables**: topic_assets, diagram_components, game_sessions
+- **Full Fractions demo data**: Complete set of mock assets for Maths > Fractions walkthrough
 
-## Anthropic API Considerations
+## API Keys & Costs
 
-- **Model**: claude-sonnet-4-6
-- **Max tokens per response**: 800 (chat), 100 (summaries)
-- **Streaming**: Enabled for all chat responses
-- **Rate limits**: Standard Anthropic rate limits apply
-- **Cost**: ~$3/MTok input, ~$15/MTok output (check current pricing)
-- **Safety**: All API calls go through server-side Next.js API routes; API key never exposed to client
+| Service | Model | Estimated Cost |
+|---|---|---|
+| Anthropic | claude-sonnet-4-6 | ~$3/MTok input, ~$15/MTok output |
+| OpenAI | DALL-E 3 | ~$0.04/image (1024x1024) |
+| Stripe | — | 2.9% + 30p per transaction |
+
+All API calls go through server-side Next.js API routes; API keys are never exposed to the client.
 
 ## License
 
