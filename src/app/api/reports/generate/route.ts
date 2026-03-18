@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
  * Generates an LA-compliant HTML progress report.
  * Matches the structure of the luminarylareportlylarae template.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json().catch(() => ({}));
     const childId = body.child_id || 'child-1';
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    console.error('Report generation error:', error);
     return NextResponse.json({ error: 'Failed to generate report' }, { status: 500 });
   }
 }

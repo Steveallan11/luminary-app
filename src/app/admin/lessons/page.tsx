@@ -10,7 +10,7 @@ import {
   ArrowLeft,
   Sparkles,
   BookOpen,
-  Image,
+  Image as ImageIcon,
   AlertTriangle,
   ChevronDown,
   ChevronRight,
@@ -22,6 +22,9 @@ import {
   Trophy,
   PartyPopper,
   Search,
+  Plus,
+  Save,
+  RefreshCw,
 } from 'lucide-react';
 import { MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
 import { Topic } from '@/types';
@@ -57,27 +60,40 @@ interface GeneratedLesson {
   brief: Record<string, unknown>;
 }
 
+interface LessonBrief {
+  keyConcepts: string[];
+  misconceptions: string[];
+  realWorldExamples: string[];
+  curriculumObjectives: string[];
+}
+
 export default function AdminLessonsPage() {
   const [activeView, setActiveView] = useState<'generate' | 'queue' | 'review'>('generate');
 
   // Generation form state
   const [selectedTopicId, setSelectedTopicId] = useState('');
   const [ageGroup, setAgeGroup] = useState('8-11');
-  const [keyConcepts, setKeyConcepts] = useState('');
-  const [misconceptions, setMisconceptions] = useState('');
-  const [realWorldExamples, setRealWorldExamples] = useState('');
-  const [curriculumObjectives, setCurriculumObjectives] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+
+  // Brief editing state
+  const [briefData, setBriefData] = useState<LessonBrief>({
+    keyConcepts: [],
+    misconceptions: [],
+    realWorldExamples: [],
+    curriculumObjectives: [],
+  });
+  const [briefEdited, setBriefEdited] = useState(false);
 
   // Queue state
   const [generatedLessons, setGeneratedLessons] = useState<GeneratedLesson[]>([]);
   const [reviewLesson, setReviewLesson] = useState<GeneratedLesson | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
 
-  // Visual Lumi state
+  // Image search state
   const [searchingImages, setSearchingImages] = useState(false);
   const [foundImages, setFoundImages] = useState<Array<{ url: string; source: string; title: string; score: number }>>([]);
+  const [selectedImagePhase, setSelectedImagePhase] = useState<string | null>(null);
 
   const selectedTopic = useMemo(
     () => ALL_TOPICS.find((t) => t.id === selectedTopicId),
@@ -88,6 +104,46 @@ export default function AdminLessonsPage() {
     () => (selectedTopic ? MOCK_SUBJECTS.find((s) => s.id === selectedTopic.subject_id) : null),
     [selectedTopic]
   );
+
+  // Auto-generate brief when topic is selected
+  const handleTopicSelect = async (topicId: string) => {
+    setSelectedTopicId(topicId);
+    const topic = ALL_TOPICS.find((t) => t.id === topicId);
+    if (!topic) return;
+
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/admin/auto-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic_title: topic.title,
+          subject_name: selectedSubject?.name || 'Unknown',
+          age_group: ageGroup,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBriefData(data.brief);
+        setBriefEdited(false);
+      }
+    } catch (error) {
+      console.error('Failed to auto-generate brief:', error);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleBriefChange = (field: keyof LessonBrief, value: string) => {
+    setBriefData((prev) => ({
+      ...prev,
+      [field]: field.includes('Concepts') || field.includes('misconceptions') || field.includes('Examples')
+        ? value.split(',').map((s) => s.trim()).filter(Boolean)
+        : value.split('\n').map((s) => s.trim()).filter(Boolean),
+    }));
+    setBriefEdited(true);
+  };
 
   const handleGenerate = async () => {
     if (!selectedTopicId || !selectedTopic || !selectedSubject) return;
@@ -100,41 +156,22 @@ export default function AdminLessonsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic_id: selectedTopicId,
-          title: selectedTopic.title,
+          topic_title: selectedTopic.title,
           subject_name: selectedSubject.name,
-          key_stage: selectedTopic.key_stage ?? 'KS2',
           age_group: ageGroup,
-          key_concepts: keyConcepts.split(',').map((s) => s.trim()).filter(Boolean),
-          common_misconceptions: misconceptions.split(',').map((s) => s.trim()).filter(Boolean),
-          real_world_examples: realWorldExamples.split(',').map((s) => s.trim()).filter(Boolean),
-          curriculum_objectives: curriculumObjectives.split('\n').map((s) => s.trim()).filter(Boolean),
+          brief: briefData,
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? 'Generation failed');
-      }
+      if (!res.ok) throw new Error('Generation failed');
 
-      const data = await res.json();
-
-      const lesson: GeneratedLesson = {
-        id: `gen-${Date.now()}`,
-        topic_title: selectedTopic.title,
-        subject_name: selectedSubject.name,
-        age_group: ageGroup,
-        quality_score: data.quality_score,
-        status: 'pending_review',
-        generated_at: data.generated_at,
-        structure: data.structure,
-        brief: data.brief,
-      };
-
+      const lesson = await res.json();
       setGeneratedLessons((prev) => [lesson, ...prev]);
       setReviewLesson(lesson);
       setActiveView('review');
-    } catch (err) {
-      setGenerationError(err instanceof Error ? err.message : 'Generation failed');
+      setGenerationError(null);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : 'Generation failed');
     } finally {
       setGenerating(false);
     }
@@ -142,405 +179,320 @@ export default function AdminLessonsPage() {
 
   const handleApprove = async (lesson: GeneratedLesson) => {
     try {
-      await fetch('/api/admin/approve-lesson', {
+      const res = await fetch('/api/admin/approve-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ structure_id: lesson.id }),
+        body: JSON.stringify({ lesson_id: lesson.id }),
       });
 
-      setGeneratedLessons((prev) =>
-        prev.map((l) => (l.id === lesson.id ? { ...l, status: 'live' } : l))
-      );
-      if (reviewLesson?.id === lesson.id) {
-        setReviewLesson({ ...lesson, status: 'live' });
+      if (res.ok) {
+        setGeneratedLessons((prev) =>
+          prev.map((l) => (l.id === lesson.id ? { ...l, status: 'live' } : l))
+        );
+        setReviewLesson((prev) => (prev?.id === lesson.id ? { ...prev, status: 'live' } : prev));
       }
-    } catch (err) {
-      console.error('Approval failed:', err);
+    } catch (error) {
+      console.error('Approval failed:', error);
     }
   };
 
-  const handleReject = (lesson: GeneratedLesson) => {
-    setGeneratedLessons((prev) =>
-      prev.map((l) => (l.id === lesson.id ? { ...l, status: 'rejected' } : l))
-    );
-    if (reviewLesson?.id === lesson.id) {
-      setReviewLesson({ ...lesson, status: 'rejected' });
+  const handleReject = async (lesson: GeneratedLesson) => {
+    try {
+      const res = await fetch('/api/admin/reject-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_id: lesson.id }),
+      });
+
+      if (res.ok) {
+        setGeneratedLessons((prev) =>
+          prev.map((l) => (l.id === lesson.id ? { ...l, status: 'rejected' } : l))
+        );
+        setReviewLesson(null);
+      }
+    } catch (error) {
+      console.error('Rejection failed:', error);
     }
   };
 
-  const handleSearchImages = async () => {
-    if (!selectedTopic || !selectedSubject) return;
+  const togglePhase = (key: string) => {
+    setExpandedPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleSearchImages = async (phase: string) => {
+    setSelectedImagePhase(phase);
     setSearchingImages(true);
-    setFoundImages([]);
 
     try {
-      const res = await fetch(
-        `/api/lumi/visual-search?topic=${encodeURIComponent(selectedTopic.title)}&subject=${encodeURIComponent(selectedSubject.name)}&age_group=${ageGroup}`
-      );
-      const data = await res.json();
+      const res = await fetch('/api/lumi/visual-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `${selectedTopic?.title} ${phase}`,
+          topic_id: selectedTopicId,
+        }),
+      });
 
-      if (data.found && data.image) {
-        setFoundImages([
-          {
-            url: data.image.url,
-            source: data.source_used,
-            title: data.image.title,
-            score: data.verification?.score ?? 0,
-          },
-        ]);
+      if (res.ok) {
+        const data = await res.json();
+        setFoundImages(data.images || []);
       }
-    } catch (err) {
-      console.error('Image search failed:', err);
+    } catch (error) {
+      console.error('Image search failed:', error);
     } finally {
       setSearchingImages(false);
     }
   };
 
-  const togglePhase = (phase: string) => {
-    setExpandedPhases((prev) => {
-      const next = new Set(prev);
-      if (next.has(phase)) next.delete(phase);
-      else next.add(phase);
-      return next;
-    });
-  };
-
   return (
-    <div>
-      {/* Tab navigation */}
-      <div className="flex items-center gap-1 mb-8 bg-white/5 rounded-xl p-1 w-fit">
-        {[
-          { id: 'generate' as const, label: 'Generate Lesson', icon: <Wand2 size={16} /> },
-          { id: 'queue' as const, label: 'Generation Queue', icon: <BookOpen size={16} /> },
-          { id: 'review' as const, label: 'Review Lesson', icon: <Eye size={16} /> },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeView === tab.id ? 'bg-white/10 text-white' : 'text-slate-light/60 hover:text-white'
-            }`}
-            onClick={() => setActiveView(tab.id)}
-          >
-            {tab.icon} {tab.label}
-            {tab.id === 'queue' && generatedLessons.length > 0 && (
-              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber/20 text-amber">
-                {generatedLessons.filter((l) => l.status === 'pending_review').length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-navy via-navy/95 to-navy/90 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-black text-white mb-2">Lesson Generation</h1>
+          <p className="text-slate-light/60">Create and manage AI-generated lessons</p>
+        </div>
 
-      {/* ─── GENERATE TAB ─── */}
-      {activeView === 'generate' && (
-        <div className="max-w-3xl">
-          <h2 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-            Generate a Full Lesson Structure
-          </h2>
-          <p className="text-sm text-slate-light/60 mb-6">
-            Provide a topic brief and Claude will generate a complete 7-phase lesson with questions, games, concept cards, and real-world examples.
-          </p>
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-8 border-b border-white/10">
+          {(['generate', 'queue', 'review'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveView(tab)}
+              className={`px-4 py-3 font-semibold text-sm transition-colors ${
+                activeView === tab
+                  ? 'text-white border-b-2 border-amber'
+                  : 'text-slate-light/60 hover:text-slate-light/80'
+              }`}
+            >
+              {tab === 'generate' && 'Generate'}
+              {tab === 'queue' && `Queue (${generatedLessons.length})`}
+              {tab === 'review' && 'Review'}
+            </button>
+          ))}
+        </div>
 
-          <div className="space-y-5">
-            {/* Topic selector */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">Topic</label>
+        {/* Generate Tab */}
+        {activeView === 'generate' && (
+          <div className="space-y-6">
+            {/* Step 1: Select Topic */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber/20 text-amber font-bold text-sm">1</span>
+                Choose a Topic
+              </h2>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
                 value={selectedTopicId}
-                onChange={(e) => setSelectedTopicId(e.target.value)}
+                onChange={(e) => handleTopicSelect(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-navy/50 border border-white/10 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
               >
                 <option value="">Select a topic...</option>
-                {MOCK_SUBJECTS.map((subject) => (
-                  <optgroup key={subject.id} label={`${subject.icon_emoji} ${subject.name}`}>
-                    {ALL_TOPICS.filter((t) => t.subject_id === subject.id).map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </optgroup>
+                {ALL_TOPICS.map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.title} ({MOCK_SUBJECTS.find((s) => s.id === topic.subject_id)?.name})
+                  </option>
                 ))}
               </select>
             </div>
 
-            {/* Age group */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">Age Group</label>
-              <div className="flex gap-2">
-                {AGE_GROUPS.map((ag) => (
-                  <button
-                    key={ag.value}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                      ageGroup === ag.value
-                        ? 'bg-amber/20 text-amber border border-amber/40'
-                        : 'bg-white/5 text-slate-light/60 border border-white/10 hover:border-white/20'
-                    }`}
-                    onClick={() => setAgeGroup(ag.value)}
-                  >
-                    {ag.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Key concepts */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">
-                Key Concepts <span className="text-slate-light/40 font-normal">(comma-separated)</span>
-              </label>
-              <input
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-light/30"
-                placeholder="e.g. numerator, denominator, equivalent fractions, simplifying"
-                value={keyConcepts}
-                onChange={(e) => setKeyConcepts(e.target.value)}
-              />
-            </div>
-
-            {/* Common misconceptions */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">
-                Common Misconceptions <span className="text-slate-light/40 font-normal">(comma-separated)</span>
-              </label>
-              <input
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-light/30"
-                placeholder="e.g. bigger denominator means bigger fraction, adding fractions by adding tops and bottoms"
-                value={misconceptions}
-                onChange={(e) => setMisconceptions(e.target.value)}
-              />
-            </div>
-
-            {/* Real-world examples */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">
-                Real-World Examples <span className="text-slate-light/40 font-normal">(comma-separated)</span>
-              </label>
-              <input
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-light/30"
-                placeholder="e.g. pizza slices, recipe measurements, telling time"
-                value={realWorldExamples}
-                onChange={(e) => setRealWorldExamples(e.target.value)}
-              />
-            </div>
-
-            {/* Curriculum objectives */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">
-                Curriculum Objectives <span className="text-slate-light/40 font-normal">(one per line)</span>
-              </label>
-              <textarea
-                className="w-full h-24 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-light/30 resize-none"
-                placeholder={`e.g.\nRecognise and show fractions of a set of objects\nAdd and subtract fractions with the same denominator\nRecognise equivalent fractions`}
-                value={curriculumObjectives}
-                onChange={(e) => setCurriculumObjectives(e.target.value)}
-              />
-            </div>
-
-            {/* Visual Lumi image search */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Image size={16} className="text-sky" />
-                  <p className="text-sm font-bold text-white">Visual Lumi — Find Teaching Images</p>
-                </div>
-                <button
-                  className="px-3 py-1.5 rounded-lg bg-sky/20 text-sky text-xs font-bold hover:bg-sky/30 disabled:opacity-50"
-                  onClick={handleSearchImages}
-                  disabled={!selectedTopicId || searchingImages}
+            {/* Step 2: Age Group */}
+            {selectedTopic && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky/20 text-sky font-bold text-sm">2</span>
+                  Age Group
+                </h2>
+                <select
+                  value={ageGroup}
+                  onChange={(e) => setAgeGroup(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-navy/50 border border-white/10 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-sky"
                 >
-                  {searchingImages ? (
-                    <><Loader2 size={12} className="inline animate-spin mr-1" /> Searching...</>
+                  {AGE_GROUPS.map((group) => (
+                    <option key={group.value} value={group.value}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Step 3: Review & Edit Brief */}
+            {selectedTopic && briefData.keyConcepts.length > 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald/20 text-emerald font-bold text-sm">3</span>
+                  Review & Edit Brief
+                  {briefEdited && <span className="ml-auto text-xs bg-amber/20 text-amber px-2 py-1 rounded-full">Edited</span>}
+                </h2>
+
+                <div className="space-y-4">
+                  {/* Key Concepts */}
+                  <div>
+                    <label className="block text-sm font-semibold text-white mb-2">Key Concepts (comma-separated)</label>
+                    <textarea
+                      value={briefData.keyConcepts.join(', ')}
+                      onChange={(e) => handleBriefChange('keyConcepts', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-navy/50 border border-white/10 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-emerald text-sm"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Misconceptions */}
+                  <div>
+                    <label className="block text-sm font-semibold text-white mb-2">Common Misconceptions (comma-separated)</label>
+                    <textarea
+                      value={briefData.misconceptions.join(', ')}
+                      onChange={(e) => handleBriefChange('misconceptions', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-navy/50 border border-white/10 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-emerald text-sm"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Real-World Examples */}
+                  <div>
+                    <label className="block text-sm font-semibold text-white mb-2">Real-World Examples (comma-separated)</label>
+                    <textarea
+                      value={briefData.realWorldExamples.join(', ')}
+                      onChange={(e) => handleBriefChange('realWorldExamples', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-navy/50 border border-white/10 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-emerald text-sm"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Curriculum Objectives */}
+                  <div>
+                    <label className="block text-sm font-semibold text-white mb-2">Curriculum Objectives (one per line)</label>
+                    <textarea
+                      value={briefData.curriculumObjectives.join('\n')}
+                      onChange={(e) => handleBriefChange('curriculumObjectives', e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-navy/50 border border-white/10 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-emerald text-sm"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Generate Button */}
+            {selectedTopic && briefData.keyConcepts.length > 0 && (
+              <div className="flex gap-3">
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-amber to-amber/80 text-white font-bold hover:from-amber/90 hover:to-amber/70 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" /> Generating...
+                    </>
                   ) : (
-                    <><Search size={12} className="inline mr-1" /> Search Images</>
+                    <>
+                      <Wand2 size={18} /> Generate Lesson
+                    </>
                   )}
                 </button>
+                <button
+                  onClick={() => handleTopicSelect(selectedTopicId)}
+                  disabled={generating}
+                  className="px-6 py-3 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw size={18} /> Regenerate Brief
+                </button>
               </div>
-              {foundImages.length > 0 && (
-                <div className="space-y-2">
-                  {foundImages.map((img, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-lg bg-navy/50 p-3">
-                      <img src={img.url} alt={img.title} className="w-20 h-20 rounded-lg object-cover" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white font-semibold truncate">{img.title}</p>
-                        <p className="text-xs text-slate-light/50">Source: {img.source}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <span className={`text-xs font-bold ${img.score >= 8 ? 'text-emerald' : 'text-amber'}`}>
-                            Accuracy: {img.score}/10
-                          </span>
-                          {img.score >= 8 && <Check size={12} className="text-emerald" />}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {!searchingImages && foundImages.length === 0 && selectedTopicId && (
-                <p className="text-xs text-slate-light/40">Click "Search Images" to find teaching visuals for this topic.</p>
-              )}
-            </div>
-
-            {/* Generate button */}
-            <div className="flex gap-3 pt-2">
-              <button
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber to-amber/80 text-navy font-bold text-sm disabled:opacity-50"
-                onClick={handleGenerate}
-                disabled={!selectedTopicId || generating}
-              >
-                {generating ? (
-                  <><Loader2 size={16} className="animate-spin" /> Generating Full Lesson...</>
-                ) : (
-                  <><Wand2 size={16} /> Generate 7-Phase Lesson</>
-                )}
-              </button>
-            </div>
+            )}
 
             {generationError && (
-              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-red-400" />
-                  <p className="text-sm text-red-300">{generationError}</p>
-                </div>
-              </div>
-            )}
-
-            {generating && (
-              <div className="p-4 rounded-xl bg-amber/10 border border-amber/20">
-                <div className="flex items-center gap-3">
-                  <Loader2 size={20} className="text-amber animate-spin" />
-                  <div>
-                    <p className="text-sm text-white font-bold">Generating complete lesson structure...</p>
-                    <p className="text-xs text-slate-light/60">
-                      Claude is building all 7 phases, game content, concept cards, and real-world examples. This may take 30-60 seconds.
-                    </p>
-                  </div>
+              <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4 flex items-start gap-3">
+                <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-300">Generation Error</p>
+                  <p className="text-red-200 text-sm">{generationError}</p>
                 </div>
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ─── QUEUE TAB ─── */}
-      {activeView === 'queue' && (
-        <div>
-          <h2 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-            Generation Queue
-          </h2>
-          <p className="text-sm text-slate-light/60 mb-6">
-            All generated lessons awaiting review. Approve to make them live, or reject to regenerate.
-          </p>
-
-          {generatedLessons.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
-              <BookOpen size={32} className="text-slate-light/30 mx-auto mb-3" />
-              <p className="text-white font-semibold mb-2">No lessons generated yet</p>
-              <p className="text-slate-light/50 text-sm mb-4">
-                Go to the Generate tab to create your first lesson structure.
-              </p>
-              <button
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber/20 text-amber text-sm font-bold hover:bg-amber/30"
-                onClick={() => setActiveView('generate')}
-              >
-                <Wand2 size={16} /> Generate a Lesson
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {generatedLessons.map((lesson) => (
+        {/* Queue Tab */}
+        {activeView === 'queue' && (
+          <div className="space-y-4">
+            {generatedLessons.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
+                <Sparkles size={32} className="text-slate-light/30 mx-auto mb-3" />
+                <p className="text-white font-semibold mb-2">No lessons generated yet</p>
+                <p className="text-slate-light/50 text-sm">Generate your first lesson to see it here</p>
+              </div>
+            ) : (
+              generatedLessons.map((lesson) => (
                 <div
                   key={lesson.id}
-                  className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/[0.07] transition-colors"
+                  onClick={() => {
+                    setReviewLesson(lesson);
+                    setActiveView('review');
+                  }}
+                  className="rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 cursor-pointer transition-colors"
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-bold text-white">{lesson.topic_title}</p>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                          lesson.status === 'live'
-                            ? 'bg-emerald/20 text-emerald'
-                            : lesson.status === 'rejected'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-amber/20 text-amber'
-                        }`}
-                      >
-                        {lesson.status === 'pending_review' ? 'Pending Review' : lesson.status === 'live' ? 'Live' : 'Rejected'}
-                      </span>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-white text-lg">{lesson.topic_title}</h3>
+                      <p className="text-slate-light/60 text-sm">{lesson.subject_name} • {lesson.age_group}</p>
                     </div>
-                    <p className="text-xs text-slate-light/50">
-                      {lesson.subject_name} &middot; {lesson.age_group} &middot; Quality: {lesson.quality_score}/100
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="px-3 py-1.5 rounded-lg bg-white/5 text-white text-xs font-bold hover:bg-white/10"
-                      onClick={() => {
-                        setReviewLesson(lesson);
-                        setActiveView('review');
-                      }}
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        lesson.status === 'live'
+                          ? 'bg-emerald/20 text-emerald'
+                          : lesson.status === 'rejected'
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-amber/20 text-amber'
+                      }`}
                     >
-                      <Eye size={12} className="inline mr-1" /> Review
-                    </button>
-                    {lesson.status === 'pending_review' && (
-                      <>
-                        <button
-                          className="px-3 py-1.5 rounded-lg bg-emerald/20 text-emerald text-xs font-bold hover:bg-emerald/30"
-                          onClick={() => handleApprove(lesson)}
-                        >
-                          <Check size={12} className="inline mr-1" /> Approve
-                        </button>
-                        <button
-                          className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/30"
-                          onClick={() => handleReject(lesson)}
-                        >
-                          <X size={12} className="inline mr-1" /> Reject
-                        </button>
-                      </>
-                    )}
+                      {lesson.status === 'pending_review' ? 'Pending' : lesson.status === 'live' ? 'Live' : 'Rejected'}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-light/50">
+                    <span>Quality: {lesson.quality_score}%</span>
+                    <span>{new Date(lesson.generated_at).toLocaleString()}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── REVIEW TAB ─── */}
-      {activeView === 'review' && (
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-                {reviewLesson ? `Review: ${reviewLesson.topic_title}` : 'Review Lesson'}
-              </h2>
-              {reviewLesson && (
-                <p className="text-sm text-slate-light/60">
-                  {reviewLesson.subject_name} &middot; {reviewLesson.age_group} &middot; Quality Score: {reviewLesson.quality_score}/100
-                </p>
-              )}
-            </div>
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-sm font-bold hover:bg-white/10"
-              onClick={() => setActiveView('queue')}
-            >
-              <ArrowLeft size={16} /> Back to Queue
-            </button>
+              ))
+            )}
           </div>
+        )}
 
-          {!reviewLesson ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
-              <Eye size={32} className="text-slate-light/30 mx-auto mb-3" />
-              <p className="text-white font-semibold mb-2">No lesson selected for review</p>
-              <p className="text-slate-light/50 text-sm">
-                Generate a lesson or select one from the queue.
-              </p>
+        {/* Review Tab */}
+        {activeView === 'review' && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-6">
+              <button
+                onClick={() => setReviewLesson(null)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-sm font-bold hover:bg-white/10"
+              >
+                <ArrowLeft size={16} /> Back to Queue
+              </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Status bar */}
-              <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
+
+            {!reviewLesson ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
+                <Eye size={32} className="text-slate-light/30 mx-auto mb-3" />
+                <p className="text-white font-semibold mb-2">No lesson selected</p>
+                <p className="text-slate-light/50 text-sm">Select a lesson from the queue to review</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Status & Actions */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-white">{reviewLesson.topic_title}</h2>
+                      <p className="text-slate-light/60">{reviewLesson.subject_name} • {reviewLesson.age_group}</p>
+                    </div>
                     <span
-                      className={`text-xs px-2 py-1 rounded-full font-bold ${
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
                         reviewLesson.status === 'live'
                           ? 'bg-emerald/20 text-emerald'
                           : reviewLesson.status === 'rejected'
@@ -550,180 +502,124 @@ export default function AdminLessonsPage() {
                     >
                       {reviewLesson.status === 'pending_review' ? 'Pending Review' : reviewLesson.status === 'live' ? 'Live' : 'Rejected'}
                     </span>
-                    <span className="text-xs text-slate-light/40">
-                      Generated {new Date(reviewLesson.generated_at).toLocaleString()}
-                    </span>
                   </div>
+
+                  {reviewLesson.status === 'pending_review' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApprove(reviewLesson)}
+                        className="flex-1 px-4 py-2 rounded-lg bg-emerald/20 text-emerald text-sm font-bold hover:bg-emerald/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Check size={16} /> Approve & Go Live
+                      </button>
+                      <button
+                        onClick={() => handleReject(reviewLesson)}
+                        className="flex-1 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <X size={16} /> Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {reviewLesson.status === 'pending_review' && (
-                  <div className="flex gap-2">
-                    <button
-                      className="px-4 py-2 rounded-lg bg-emerald/20 text-emerald text-sm font-bold hover:bg-emerald/30"
-                      onClick={() => handleApprove(reviewLesson)}
-                    >
-                      <Check size={14} className="inline mr-1" /> Approve &amp; Go Live
-                    </button>
-                    <button
-                      className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/30"
-                      onClick={() => handleReject(reviewLesson)}
-                    >
-                      <X size={14} className="inline mr-1" /> Reject
-                    </button>
+
+                {/* Phase Breakdown */}
+                <div className="space-y-2">
+                  {(Object.entries(PHASE_LABELS) as [string, { label: string; icon: JSX.Element; colour: string }][]).map(([key, meta]) => {
+                    const phaseData = (reviewLesson.structure as Record<string, unknown>)[key] as Record<string, unknown> | undefined;
+                    if (!phaseData) return null;
+                    const isExpanded = expandedPhases.has(key);
+
+                    return (
+                      <div key={key} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                        <button
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                          onClick={() => togglePhase(key)}
+                        >
+                          <span style={{ color: meta.colour }}>{meta.icon}</span>
+                          <span className="text-sm font-bold text-white">{meta.label}</span>
+                          <span className="text-xs text-slate-light/40 ml-2">
+                            {String((phaseData as { phase_goal?: string }).phase_goal ?? '').slice(0, 80)}...
+                          </span>
+                          <span className="ml-auto text-slate-light/40">
+                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                            <div className="pt-3">
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Phase Goal</p>
+                              <p className="text-sm text-white">{(phaseData as { phase_goal?: string }).phase_goal}</p>
+                            </div>
+
+                            {(phaseData as { opening_question?: string }).opening_question && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Opening Question</p>
+                                <p className="text-sm text-amber italic">&ldquo;{(phaseData as { opening_question?: string }).opening_question}&rdquo;</p>
+                              </div>
+                            )}
+
+                            {((phaseData as { teaching_points?: string[] }).teaching_points ?? []).length > 0 && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Teaching Points</p>
+                                <ul className="space-y-1">
+                                  {((phaseData as { teaching_points?: string[] }).teaching_points ?? []).map((point: string, i: number) => (
+                                    <li key={i} className="text-sm text-slate-light/80 flex items-start gap-2">
+                                      <span className="text-emerald mt-0.5">&#8226;</span>
+                                      {point}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Image Search for this Phase */}
+                            <div>
+                              <button
+                                onClick={() => handleSearchImages(key)}
+                                disabled={searchingImages}
+                                className="text-xs font-semibold text-sky hover:text-sky/80 flex items-center gap-1 mt-2"
+                              >
+                                {searchingImages ? (
+                                  <>
+                                    <Loader2 size={12} className="animate-spin" /> Searching...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ImageIcon size={12} /> Search Images for this phase
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Found Images */}
+                {foundImages.length > 0 && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <h3 className="font-bold text-white mb-3">Found Images</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {foundImages.map((img, i) => (
+                        <div key={i} className="rounded-lg overflow-hidden border border-white/10 hover:border-white/30 cursor-pointer transition-colors">
+                          <img src={img.url} alt={img.title} className="w-full h-32 object-cover" />
+                          <div className="p-2 bg-navy/50">
+                            <p className="text-xs font-semibold text-white truncate">{img.title}</p>
+                            <p className="text-xs text-slate-light/60">{img.source}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-
-              {/* Phase-by-phase review */}
-              <div className="space-y-2">
-                {(Object.entries(PHASE_LABELS) as [string, { label: string; icon: JSX.Element; colour: string }][]).map(([key, meta]) => {
-                  const phaseData = (reviewLesson.structure as Record<string, unknown>)[key] as Record<string, unknown> | undefined;
-                  if (!phaseData) return null;
-                  const isExpanded = expandedPhases.has(key);
-
-                  return (
-                    <div key={key} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-                      <button
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
-                        onClick={() => togglePhase(key)}
-                      >
-                        <span style={{ color: meta.colour }}>{meta.icon}</span>
-                        <span className="text-sm font-bold text-white">{meta.label}</span>
-                        <span className="text-xs text-slate-light/40 ml-2">
-                          {String((phaseData as { phase_goal?: string }).phase_goal ?? '').slice(0, 80)}...
-                        </span>
-                        <span className="ml-auto text-slate-light/40">
-                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </span>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-white/5">
-                          <div className="pt-3">
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Phase Goal</p>
-                            <p className="text-sm text-white">{(phaseData as { phase_goal?: string }).phase_goal}</p>
-                          </div>
-
-                          {(phaseData as { opening_question?: string }).opening_question && (
-                            <div>
-                              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Opening Question</p>
-                              <p className="text-sm text-amber italic">&ldquo;{(phaseData as { opening_question?: string }).opening_question}&rdquo;</p>
-                            </div>
-                          )}
-
-                          {((phaseData as { teaching_points?: string[] }).teaching_points ?? []).length > 0 && (
-                            <div>
-                              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Teaching Points</p>
-                              <ul className="space-y-1">
-                                {((phaseData as { teaching_points?: string[] }).teaching_points ?? []).map((point: string, i: number) => (
-                                  <li key={i} className="text-sm text-slate-light/80 flex items-start gap-2">
-                                    <span className="text-emerald mt-0.5">&#8226;</span>
-                                    {point}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {((phaseData as { questions?: Array<{ question: string; expected_answer: string; hints: string[] }> }).questions ?? []).length > 0 && (
-                            <div>
-                              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Questions</p>
-                              <div className="space-y-2">
-                                {((phaseData as { questions?: Array<{ question: string; expected_answer: string; hints: string[] }> }).questions ?? []).map(
-                                  (q: { question: string; expected_answer: string; hints: string[] }, i: number) => (
-                                    <div key={i} className="rounded-lg bg-navy/50 p-3">
-                                      <p className="text-sm text-white font-semibold mb-1">Q{i + 1}: {q.question}</p>
-                                      <p className="text-xs text-emerald/80">Expected: {q.expected_answer}</p>
-                                      {q.hints?.length > 0 && (
-                                        <p className="text-xs text-amber/60 mt-1">
-                                          Hints: {q.hints.join(' | ')}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {(phaseData as { transition_to_next?: string }).transition_to_next && (
-                            <div>
-                              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-light/40 mb-1">Transition</p>
-                              <p className="text-sm text-sky/80 italic">{(phaseData as { transition_to_next?: string }).transition_to_next}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Game content */}
-              {Boolean((reviewLesson.structure as Record<string, unknown>).game_content) && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Gamepad2 size={16} className="text-red-400" />
-                    <p className="text-sm font-bold text-white">Game Content</p>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                      {((reviewLesson.structure as Record<string, unknown>).game_content as Record<string, unknown>)?.game_type as string}
-                    </span>
-                  </div>
-                  <pre className="text-xs text-slate-light/60 bg-navy/50 rounded-lg p-3 overflow-x-auto">
-                    {JSON.stringify((reviewLesson.structure as Record<string, unknown>).game_content, null, 2)}
-                  </pre>
-                </div>
-              )}
-
-              {/* Concept card */}
-              {Boolean((reviewLesson.structure as Record<string, unknown>).concept_card_json) && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles size={16} className="text-amber" />
-                    <p className="text-sm font-bold text-white">Concept Card Preview</p>
-                  </div>
-                  <div className="rounded-xl bg-gradient-to-br from-amber/10 to-amber/5 border border-amber/20 p-4">
-                    <p className="text-2xl mb-2">
-                      {((reviewLesson.structure as Record<string, unknown>).concept_card_json as Record<string, unknown>)?.icon as string}
-                    </p>
-                    <p className="text-lg font-bold text-white">
-                      {((reviewLesson.structure as Record<string, unknown>).concept_card_json as Record<string, unknown>)?.title as string}
-                    </p>
-                    <p className="text-sm text-amber/80 mb-2">
-                      {((reviewLesson.structure as Record<string, unknown>).concept_card_json as Record<string, unknown>)?.subtitle as string}
-                    </p>
-                    <p className="text-sm text-slate-light/70">
-                      {((reviewLesson.structure as Record<string, unknown>).concept_card_json as Record<string, unknown>)?.body as string}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Real-world examples */}
-              {Boolean((reviewLesson.structure as Record<string, unknown>).realworld_json) && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <BookOpen size={16} className="text-emerald" />
-                    <p className="text-sm font-bold text-white">Real-World Examples</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(['everyday', 'inspiring'] as const).map((key) => {
-                      const rw = ((reviewLesson.structure as Record<string, unknown>).realworld_json as Record<string, Record<string, string>>)?.[key];
-                      if (!rw) return null;
-                      return (
-                        <div key={key} className="rounded-lg bg-navy/50 p-3">
-                          <p className="text-xs uppercase tracking-[0.15em] text-emerald/60 mb-1">{key}</p>
-                          <p className="text-sm font-bold text-white mb-1">{rw.title}</p>
-                          <p className="text-xs text-slate-light/60">{rw.description}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

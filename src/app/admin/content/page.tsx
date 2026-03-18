@@ -118,6 +118,52 @@ export default function AdminContentPage() {
     setEditJson('');
   };
 
+  const handleSaveChanges = async () => {
+    if (!reviewAsset) return;
+    try {
+      const updatedJson = JSON.parse(editJson);
+      const res = await fetch('/api/admin/save-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: reviewAsset.id,
+          content_json: updatedJson,
+        }),
+      });
+
+      if (res.ok) {
+        // Update local state
+        setReviewAsset((prev) => prev ? { ...prev, content_json: updatedJson } : null);
+        alert('Content saved successfully!');
+      }
+    } catch (error) {
+      alert('Failed to save: ' + (error instanceof Error ? error.message : 'Invalid JSON'));
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!reviewAsset) return;
+    try {
+      const res = await fetch('/api/admin/publish-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: reviewAsset.id,
+        }),
+      });
+
+      if (res.ok) {
+        setReviewAsset((prev) => prev ? { ...prev, status: 'published' } : null);
+        setGeneratedContent((prev) =>
+          prev.map((a) => (a.id === reviewAsset.id ? { ...a, status: 'published' } : a))
+        );
+        alert('Content published successfully!');
+      }
+    } catch (error) {
+      alert('Failed to publish: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center gap-1 mb-8 bg-white/5 rounded-xl p-1 w-fit">
@@ -414,9 +460,10 @@ export default function AdminContentPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
+                          onClick={handlePublish}
                           className="px-3 py-1.5 rounded-lg bg-emerald/20 text-emerald text-xs font-bold hover:bg-emerald/30"
                         >
-                          <Check size={12} className="inline mr-1" /> Approve
+                          <Check size={12} className="inline mr-1" /> Publish
                         </button>
                         <button
                           className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/30"
@@ -455,7 +502,7 @@ export default function AdminContentPage() {
                       onChange={(e) => setEditJson(e.target.value)}
                     />
                     <div className="flex gap-2 mt-4">
-                      <button className="px-4 py-2 rounded-lg bg-amber/20 text-amber text-sm font-bold hover:bg-amber/30">
+                      <button onClick={handleSaveChanges} className="px-4 py-2 rounded-lg bg-amber/20 text-amber text-sm font-bold hover:bg-amber/30">
                         <Edit size={14} className="inline mr-1" /> Save Changes
                       </button>
                       <button
