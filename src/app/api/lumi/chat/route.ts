@@ -1,7 +1,18 @@
 import { NextRequest } from 'next/server';
 import { getAnthropicClient, LUMI_MODEL, LUMI_MAX_TOKENS } from '@/lib/anthropic';
-import { generateLumiSystemPrompt, generateHintPrompt } from '@/lib/lumi-prompt';
-import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
+import { generateHintPrompt, generateLumiSystemPrompt } from '@/lib/lumi-prompt';
+import { MOCK_CHILD, MOCK_SUBJECTS } from '@/lib/mock-data';
+import {
+  buildContentManifest,
+  findTopicBySlug,
+  getLessonStructureForTopic,
+  getMockPhaseTracking,
+  getNextPhase,
+  parseContentSignals,
+  parsePhaseSignal,
+  stripSignals,
+} from '@/lib/lesson-engine';
+import { LessonPhase } from '@/types';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -17,26 +28,27 @@ interface ChatRequest {
   session_id: string;
   is_hint?: boolean;
   mastery_score?: number;
+  current_phase?: LessonPhase;
+  prior_knowledge?: string;
 }
 
-/**
- * POST /api/lumi/chat
- *
- * Streams a response from Claude as Lumi the AI tutor.
- * Uses the child's profile and topic context to generate a personalised system prompt.
- */
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { child_id, subject_slug, topic_slug, messages, is_hint, mastery_score } = body;
+    const {
+      subject_slug,
+      topic_slug,
+      messages,
+      is_hint,
+      mastery_score,
+      session_id,
+      current_phase,
+      prior_knowledge,
+    } = body;
 
-    // Fetch child profile (using mock data for MVP; replace with Supabase query)
     const child = MOCK_CHILD;
-
-    // Fetch subject and topic
     const subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug);
-    const topics = MOCK_TOPICS[subject_slug];
-    const topic = topics?.find((t) => t.slug === topic_slug);
+    const topic = findTopicBySlug(subject_slug, topic_slug);
 
     if (!subject || !topic) {
       return new Response(JSON.stringify({ error: 'Subject or topic not found' }), {
@@ -45,39 +57,40 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate dynamic system prompt
+    const phaseTracking = getMockPhaseTracking(session_id);
+    const activePhase = current_phase ?? phaseTracking.current_phase;
+    const structure = getLessonStructureForTopic(topic.id, child.age);
+    const contentManifest = buildContentManifest(topic.id);
+
     const systemPrompt = generateLumiSystemPrompt({
       child_name: child.name,
       child_age: child.age,
       subject_name: subject.name,
       topic_title: topic.title,
       topic_description: topic.description,
-      previous_struggles: [], // Would come from Supabase in production
+      previous_struggles: prior_knowledge ? [prior_knowledge] : [],
       mastery_score: mastery_score ?? 0,
+      content_manifest: contentManifest,
+      structure,
+      current_phase: activePhase,
     });
 
-    // Build messages array for Claude
     const claudeMessages: ChatMessage[] = messages.map((m) => ({
       role: m.role,
       content: m.content,
     }));
 
-    // If hint requested, add hint instruction to the last user message
     if (is_hint && claudeMessages.length > 0) {
       const lastMsg = claudeMessages[claudeMessages.length - 1];
+      const hintInstruction = generateHintPrompt(activePhase);
       if (lastMsg.role === 'user') {
-        lastMsg.content = `${lastMsg.content}\n\n[SYSTEM: ${generateHintPrompt()}]`;
+        lastMsg.content = `${lastMsg.content}\n\n[SYSTEM: ${hintInstruction}]`;
       } else {
-        claudeMessages.push({
-          role: 'user',
-          content: `[SYSTEM: ${generateHintPrompt()}]`,
-        });
+        claudeMessages.push({ role: 'user', content: `[SYSTEM: ${hintInstruction}]` });
       }
     }
 
-    // Call Anthropic with streaming
     const client = getAnthropicClient();
-
     const stream = await client.messages.stream({
       model: LUMI_MODEL,
       max_tokens: LUMI_MAX_TOKENS,
@@ -85,21 +98,43 @@ export async function POST(request: NextRequest) {
       messages: claudeMessages,
     });
 
-    // Create a ReadableStream that forwards the Anthropic stream
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
+          let combinedText = '';
+
           for await (const event of stream) {
             if (
               event.type === 'content_block_delta' &&
               event.delta.type === 'text_delta'
             ) {
+              combinedText += event.delta.text;
               const chunk = `data: ${JSON.stringify({ text: event.delta.text })}\n\n`;
               controller.enqueue(encoder.encode(chunk));
             }
           }
-          // Send done signal
+
+          const contentSignals = parseContentSignals(combinedText);
+          const phaseSignal = parsePhaseSignal(combinedText);
+          const cleanText = stripSignals(combinedText);
+          const resolvedPhase = phaseSignal?.phase ?? (cleanText.length > 200 ? getNextPhase(activePhase) : activePhase);
+
+          if (cleanText !== combinedText) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ replace_text: cleanText })}\n\n`)
+            );
+          }
+
+          if (contentSignals.length > 0) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content_signals: contentSignals })}\n\n`)
+            );
+          }
+
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ phase: resolvedPhase })}\n\n`)
+          );
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (err) {
@@ -120,7 +155,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Lumi chat error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

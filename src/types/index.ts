@@ -14,6 +14,8 @@ export type GameType = 'match_it' | 'sort_it' | 'fill_it' | 'true_false' | 'buil
 export type DiagramType = 'fraction_bar' | 'timeline' | 'labelled_diagram' | 'sorting_visual' | 'number_line';
 export type AssetStatus = 'draft' | 'published' | 'archived';
 export type AgeGroup = '5-7' | '8-11' | '12-14' | '15-16' | 'all';
+export type LessonStructureStatus = 'generating' | 'live' | 'archived';
+export type LessonPhase = 'spark' | 'explore' | 'anchor' | 'practise' | 'create' | 'check' | 'celebrate';
 
 export interface Family {
   id: string;
@@ -64,6 +66,8 @@ export interface Topic {
   key_stage: string;
   estimated_minutes: number;
   created_at: string;
+  lesson_generation_status?: string | null;
+  last_generated_at?: string | null;
 }
 
 export interface ChildTopicProgress {
@@ -85,6 +89,113 @@ export interface LessonSession {
   duration_minutes: number;
   xp_earned: number;
   summary_text: string | null;
+  created_at: string;
+  structure_id?: string | null;
+  prior_knowledge_response?: string | null;
+  is_revisit?: boolean;
+}
+
+export interface LessonPhaseConcept {
+  id: string;
+  title: string;
+  explanation: string;
+  analogy: string;
+  real_example: string;
+  check_question: string;
+  common_mistake: string;
+}
+
+export interface LessonPractiseQuestion {
+  id: string;
+  question: string;
+  difficulty: number;
+  correct_answer: string;
+  explanation: string;
+  hint: string;
+}
+
+export interface LessonCheckQuestion {
+  type: string;
+  question: string;
+  what_correct_looks_like: string;
+}
+
+export interface LessonStructureContent {
+  spark: {
+    hook_type: string;
+    hook_content: string;
+    opening_question: string;
+    expected_responses: string[];
+    prior_knowledge_integration: string;
+  };
+  explore: {
+    concepts: LessonPhaseConcept[];
+    sequence_notes: string;
+  };
+  anchor: {
+    method: string;
+    prompt: string;
+    mastery_indicators: string[];
+    fallback_approach: string;
+  };
+  practise: {
+    questions: LessonPractiseQuestion[];
+  };
+  create: {
+    task_type: string;
+    brief: string;
+    scaffolding: string;
+    real_world_connection: string;
+    interest_placeholder: string;
+  };
+  check: {
+    questions: LessonCheckQuestion[];
+  };
+  celebrate: {
+    fun_fact: string;
+    next_topic_teaser: string;
+    praise_templates: string[];
+  };
+  personalisation_hooks?: Record<string, unknown>;
+}
+
+export interface TopicLessonStructure {
+  id: string;
+  topic_id: string;
+  age_group: Exclude<AgeGroup, 'all'>;
+  version: number;
+  status: LessonStructureStatus;
+  generation_model: string | null;
+  spark_json: LessonStructureContent['spark'] | null;
+  explore_json: LessonStructureContent['explore'] | null;
+  anchor_json: LessonStructureContent['anchor'] | null;
+  practise_json: LessonStructureContent['practise'] | null;
+  create_json: LessonStructureContent['create'] | null;
+  check_json: LessonStructureContent['check'] | null;
+  celebrate_json: LessonStructureContent['celebrate'] | null;
+  personalisation_hooks: Record<string, unknown> | null;
+  quality_score: number;
+  times_delivered: number;
+  avg_mastery_score: number | null;
+  auto_improvement_notes: string | null;
+  auto_approve_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LessonPhaseTracking {
+  id: string;
+  session_id: string;
+  current_phase: LessonPhase;
+  phase_started_at: string;
+  objectives_covered: string[];
+  mastery_signals: Record<string, unknown>;
+  phase_history: Array<{ phase: LessonPhase; entered_at: string; exited_at?: string; reason?: string }>;
+  hints_used: number;
+  practise_responses: Record<string, unknown>[];
+  check_responses: Record<string, unknown>[];
+  final_mastery_score: number | null;
+  content_assets_shown: string[];
   created_at: string;
 }
 
@@ -294,6 +405,15 @@ export interface ContentManifest {
   check_questions?: { id: string; title: string };
 }
 
+export interface ParsedContentSignal {
+  type: string;
+  id: string;
+}
+
+export interface ParsedPhaseSignal {
+  phase: LessonPhase;
+}
+
 // XP Level System
 export interface XPLevel {
   level: number;
@@ -328,6 +448,8 @@ export const TIER_LIMITS = {
   family: { maxSubjects: 15, maxChildren: 3, maxSessionsPerWeek: Infinity, pdfReports: true },
   pro: { maxSubjects: 15, maxChildren: 5, maxSessionsPerWeek: Infinity, pdfReports: true },
 } as const;
+
+export const LESSON_PHASES: LessonPhase[] = ['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'];
 
 export const AVATARS: { value: Avatar; label: string; emoji: string }[] = [
   { value: 'fox', label: 'Fox', emoji: '🦊' },

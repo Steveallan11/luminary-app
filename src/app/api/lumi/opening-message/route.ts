@@ -1,18 +1,12 @@
 import { NextRequest } from 'next/server';
 import { getAnthropicClient, LUMI_MODEL, LUMI_MAX_TOKENS } from '@/lib/anthropic';
 import { generateLumiSystemPrompt } from '@/lib/lumi-prompt';
-import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
+import { MOCK_CHILD, MOCK_SUBJECTS } from '@/lib/mock-data';
+import { buildContentManifest, findTopicBySlug, getLessonStructureForTopic, startLesson } from '@/lib/lesson-engine';
 
-// Simple in-memory cache for opening messages (5 min TTL)
 const cache = new Map<string, { text: string; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
-/**
- * GET /api/lumi/opening-message
- *
- * Generates Lumi's opening message for a new lesson.
- * Cached for 5 minutes per child+topic combination.
- */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -27,22 +21,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check cache
-    const cacheKey = `${child_id}:${subject_slug}:${topic_slug}`;
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return new Response(JSON.stringify({ message: cached.text }), {
+    const startState = startLesson(subject_slug, topic_slug);
+    if (!startState) {
+      return new Response(JSON.stringify({ error: 'Topic not found' }), {
+        status: 404,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Fetch child profile (mock for MVP)
-    const child = MOCK_CHILD;
+    if (startState.state === 'generating') {
+      return new Response(
+        JSON.stringify({
+          message: startState.openingPrompt,
+          state: 'generating',
+          estimated_seconds: startState.estimatedSeconds,
+          progress_message: startState.progressMessage,
+          session_id: startState.sessionId,
+          content_manifest: startState.contentManifest,
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Fetch subject and topic
+    const cacheKey = `${child_id}:${subject_slug}:${topic_slug}:${MOCK_CHILD.age}`;
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return new Response(
+        JSON.stringify({
+          message: cached.text,
+          state: 'live',
+          session_id: startState.sessionId,
+          phase: startState.phase,
+          content_manifest: startState.contentManifest,
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug);
-    const topics = MOCK_TOPICS[subject_slug];
-    const topic = topics?.find((t) => t.slug === topic_slug);
+    const topic = findTopicBySlug(subject_slug, topic_slug);
+    const structure = topic ? getLessonStructureForTopic(topic.id, MOCK_CHILD.age) : null;
 
     if (!subject || !topic) {
       return new Response(JSON.stringify({ error: 'Subject or topic not found' }), {
@@ -51,44 +69,45 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Generate system prompt
     const systemPrompt = generateLumiSystemPrompt({
-      child_name: child.name,
-      child_age: child.age,
+      child_name: MOCK_CHILD.name,
+      child_age: MOCK_CHILD.age,
       subject_name: subject.name,
       topic_title: topic.title,
       topic_description: topic.description,
       previous_struggles: [],
       mastery_score: 0,
+      content_manifest: buildContentManifest(topic.id),
+      structure,
+      current_phase: 'spark',
     });
 
-    // Call Claude with START_LESSON trigger
     const client = getAnthropicClient();
     const response = await client.messages.create({
       model: LUMI_MODEL,
       max_tokens: LUMI_MAX_TOKENS,
       system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: 'START_LESSON',
-        },
-      ],
+      messages: [{ role: 'user', content: 'START_LESSON' }],
     });
 
-    let openingMessage = '';
-    if (response.content[0]?.type === 'text') {
-      openingMessage = response.content[0].text;
-    }
+    const openingMessage =
+      response.content[0]?.type === 'text'
+        ? response.content[0].text
+        : startState.openingPrompt;
 
-    // Cache the result
     cache.set(cacheKey, { text: openingMessage, timestamp: Date.now() });
 
-    return new Response(JSON.stringify({ message: openingMessage }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        message: openingMessage,
+        state: 'live',
+        session_id: startState.sessionId,
+        phase: startState.phase,
+        content_manifest: startState.contentManifest,
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    console.error('Opening message error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
