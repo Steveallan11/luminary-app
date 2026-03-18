@@ -82,18 +82,24 @@ export async function GET(request: NextRequest) {
       current_phase: 'spark',
     });
 
-    const client = getAnthropicClient();
-    const response = await client.messages.create({
-      model: LUMI_MODEL,
-      max_tokens: LUMI_MAX_TOKENS,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: 'START_LESSON' }],
-    });
+    let openingMessage = startState.openingPrompt;
 
-    const openingMessage =
-      response.content[0]?.type === 'text'
-        ? response.content[0].text
-        : startState.openingPrompt;
+    try {
+      const client = getAnthropicClient();
+      const response = await client.messages.create({
+        model: LUMI_MODEL,
+        max_tokens: LUMI_MAX_TOKENS,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: 'START_LESSON' }],
+      });
+
+      const textBlock = response.content.find((block) => block.type === 'text');
+      if (textBlock && 'text' in textBlock && textBlock.text.trim()) {
+        openingMessage = textBlock.text;
+      }
+    } catch {
+      openingMessage = startState.openingPrompt;
+    }
 
     cache.set(cacheKey, { text: openingMessage, timestamp: Date.now() });
 
