@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -23,6 +24,7 @@ import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPICS, LESSON_PHASE_LABELS } from '@/l
 import { clampMastery, detectCorrectResponse, detectExplanation } from '@/lib/mastery';
 import { getXPLevel, LessonPhase, ParsedContentSignal } from '@/types';
 import { buildContentManifest, getTopicProgress } from '@/lib/lesson-engine';
+import { createClient as createSupabaseBrowserClient } from '@/lib/supabase';
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
 
 interface ChatMessage {
@@ -78,6 +80,7 @@ export default function LessonPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<number | null>(null);
   const generationRef = useRef<number | null>(null);
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const [elapsedMinutes, setElapsedMinutes] = useState(0);
 
   const contentAssets = useMemo(() => {
@@ -102,6 +105,11 @@ export default function LessonPage() {
     }
     return () => {
       if (generationRef.current) clearInterval(generationRef.current);
+      if (realtimeChannelRef.current) {
+        const supabase = createSupabaseBrowserClient();
+        void supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
     };
   }, [subject, topic]);
 
@@ -149,7 +157,7 @@ export default function LessonPage() {
         generationRef.current = window.setInterval(() => {
           setGenerationProgress((prev) => (prev >= 0.9 ? prev : prev + 0.1));
         }, 900);
-        await fetchGeneratedLesson();
+        await fetchGeneratedLesson(startData.lesson.sessionId, startData.lesson.topic.id, startData.lesson.ageGroup);
         return;
       }
 
@@ -169,13 +177,59 @@ export default function LessonPage() {
     }
   };
 
-  const fetchGeneratedLesson = async () => {
+  const handleGeneratedLessonReady = useCallback(
+    async (payload?: { content_manifest?: typeof generatedManifest }) => {
+      if (generationRef.current) clearInterval(generationRef.current);
+      if (realtimeChannelRef.current) {
+        const supabase = createSupabaseBrowserClient();
+        void supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+      setGenerationProgress(1);
+      if (payload?.content_manifest) {
+        setGeneratedManifest(payload.content_manifest);
+      }
+      await fetchOpeningMessage(sessionId, true);
+    },
+    [sessionId]
+  );
+
+  const subscribeToLessonGeneration = useCallback((topicId: string, ageGroup: string) => {
     try {
+      const supabase = createSupabaseBrowserClient();
+      if (realtimeChannelRef.current) {
+        void supabase.removeChannel(realtimeChannelRef.current);
+      }
+
+      const channel = supabase
+        .channel(`lesson-generation:${topicId}:${ageGroup}`)
+        .on('broadcast', { event: 'lesson_structure_ready' }, async ({ payload }) => {
+          const eventPayload = payload as {
+            session_id?: string;
+            content_manifest?: typeof generatedManifest;
+          };
+
+          if (eventPayload.session_id && eventPayload.session_id !== sessionId) return;
+          await handleGeneratedLessonReady(eventPayload);
+        })
+        .subscribe();
+
+      realtimeChannelRef.current = channel;
+    } catch {
+      // Realtime setup is optional; API response fallback will still complete the flow.
+    }
+  }, [handleGeneratedLessonReady, sessionId]);
+
+  const fetchGeneratedLesson = async (activeSessionId: string, topicId: string, ageGroup: string) => {
+    try {
+      subscribeToLessonGeneration(topicId, ageGroup);
+
       const res = await fetch('/api/lesson/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           child_id: MOCK_CHILD.id,
+          session_id: activeSessionId,
           subject_slug: slug,
           topic_slug: topicSlug,
         }),
@@ -183,11 +237,20 @@ export default function LessonPage() {
 
       if (!res.ok) throw new Error('Failed to generate lesson');
       const data = await res.json();
-      if (generationRef.current) clearInterval(generationRef.current);
-      setGenerationProgress(1);
-      setGeneratedManifest(data.lesson.contentManifest ?? generatedManifest);
-      await fetchOpeningMessage(sessionId, true);
+
+      if (data.realtime_payload?.session_id === activeSessionId) {
+        await handleGeneratedLessonReady(data.realtime_payload);
+        return;
+      }
+
+      if (data.lesson?.contentManifest) {
+        await handleGeneratedLessonReady({ content_manifest: data.lesson.contentManifest });
+        return;
+      }
+
+      throw new Error('No generated lesson payload returned');
     } catch (err) {
+      if (generationRef.current) clearInterval(generationRef.current);
       setError(err instanceof Error ? err.message : 'Failed to generate lesson');
       setSessionState('chatting');
     }

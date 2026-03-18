@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
 import { generateLessonEnvelope } from '@/lib/lesson-engine';
+import { publishLessonGenerationReady } from '@/lib/lesson-realtime';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const subjectSlug = body.subject_slug as string | undefined;
     const topicSlug = body.topic_slug as string | undefined;
+    const sessionId = body.session_id as string | undefined;
 
     if (!subjectSlug || !topicSlug) {
       return Response.json(
@@ -20,11 +22,21 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Topic not found' }, { status: 404 });
     }
 
+    const realtimePayload = sessionId
+      ? await publishLessonGenerationReady({
+          sessionId,
+          subjectSlug,
+          topicSlug,
+        })
+      : null;
+
     return Response.json({
       status: 'live',
-      generated_at: new Date().toISOString(),
+      generated_at: realtimePayload?.generated_at ?? new Date().toISOString(),
       lesson: generated,
       realtime_event: 'lesson_structure_ready',
+      realtime_payload: realtimePayload,
+      source: realtimePayload?.source ?? 'mock',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to generate lesson';
