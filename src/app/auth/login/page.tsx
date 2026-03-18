@@ -58,15 +58,22 @@ export default function LoginPage() {
   };
 
   const handlePinInput = (digit: string) => {
-    if (pin.length < 4) {
-      const newPin = pin + digit;
-      setPin(newPin);
-      if (newPin.length === 4) {
-        // Verify PIN and redirect
-        setTimeout(() => {
-          router.push('/learn');
-        }, 500);
-      }
+    if (loading || pin.length >= 4) {
+      return;
+    }
+
+    const newPin = `${pin}${digit}`;
+    setPin(newPin);
+    setError('');
+
+    if (newPin.length === 4) {
+      setLoading(true);
+
+      window.setTimeout(() => {
+        setLoading(false);
+        setPin('');
+        router.push('/learn');
+      }, 350);
     }
   };
 
@@ -285,6 +292,7 @@ export default function LoginPage() {
                   Hi, {selectedChild.name}!
                 </h2>
                 <p className="text-slate-light/70">Enter your secret PIN</p>
+                <p className="text-xs text-slate-light/50 mt-2">Demo mode: any 4 digits will take you into your learning world.</p>
               </div>
 
               {/* PIN dots */}
@@ -303,6 +311,18 @@ export default function LoginPage() {
                 ))}
               </div>
 
+              {error && (
+                <div className="mb-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 text-center">
+                  {error}
+                </div>
+              )}
+
+              {loading && (
+                <div className="mb-4 rounded-2xl border border-amber/20 bg-amber/10 px-4 py-3 text-sm text-amber-light text-center">
+                  Opening your learning world...
+                </div>
+              )}
+
               {/* Number pad */}
               <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
@@ -310,6 +330,8 @@ export default function LoginPage() {
                     key={num}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => handlePinInput(String(num))}
+                    type="button"
+                    disabled={loading}
                     className="w-full aspect-square rounded-2xl bg-navy/40 border border-white/10 text-2xl font-bold text-white hover:bg-navy/60 hover:border-amber/30 transition-all flex items-center justify-center"
                   >
                     {num}
@@ -319,6 +341,8 @@ export default function LoginPage() {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={() => handlePinInput('0')}
+                  type="button"
+                  disabled={loading}
                   className="w-full aspect-square rounded-2xl bg-navy/40 border border-white/10 text-2xl font-bold text-white hover:bg-navy/60 hover:border-amber/30 transition-all flex items-center justify-center"
                 >
                   0
@@ -326,6 +350,8 @@ export default function LoginPage() {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={handlePinDelete}
+                  type="button"
+                  disabled={loading}
                   className="w-full aspect-square rounded-2xl bg-navy/40 border border-white/10 text-lg font-bold text-slate-light/60 hover:bg-navy/60 hover:text-white transition-all flex items-center justify-center"
                 >
                   ←

@@ -10,7 +10,8 @@ import {
   getNextPhase,
   parseContentSignals,
   parsePhaseSignal,
-  stripSignals,
+  parseImageSignals,
+  stripAllSignals,
 } from '@/lib/lesson-engine';
 import { LessonPhase } from '@/types';
 
@@ -117,7 +118,8 @@ export async function POST(request: NextRequest) {
 
           const contentSignals = parseContentSignals(combinedText);
           const phaseSignal = parsePhaseSignal(combinedText);
-          const cleanText = stripSignals(combinedText);
+          const imageSignals = parseImageSignals(combinedText);
+          const cleanText = stripAllSignals(combinedText);
           const resolvedPhase = phaseSignal?.phase ?? (cleanText.length > 200 ? getNextPhase(activePhase) : activePhase);
 
           if (cleanText !== combinedText) {
@@ -129,6 +131,12 @@ export async function POST(request: NextRequest) {
           if (contentSignals.length > 0) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ content_signals: contentSignals })}\n\n`)
+            );
+          }
+
+          if (imageSignals.length > 0) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ image_signals: imageSignals })}\n\n`)
             );
           }
 

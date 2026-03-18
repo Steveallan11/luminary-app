@@ -1,0 +1,39 @@
+Learner experience test notes
+
+1. Login route: /auth/login
+- Page presents three mode switches: Learner, Parent, Admin.
+- Default visible form appears parent-email based, which may create mild confusion for a child-first path.
+- Learner mode button is visible and likely needs explicit selection for clearer child journey testing.
+- Branding and first impression appear polished and consistent with Luminary visual identity.
+
+Next: switch to learner mode and continue through child login, home, subject, lesson, progress, achievement, and completion flows.
+
+2. Learner login flow progression
+The entered parent email successfully advances to a child selection step showing demo learners Oliver (Year 3) and Amelia (Year 5). Selecting Oliver advances to a numeric PIN keypad screen, which confirms the intended multi-step learner flow exists.
+
+A critical issue appeared at the PIN step during testing. Interacting with the keypad unexpectedly redirected the browser to the public landing page (`/`) instead of keeping the learner inside the PIN flow or showing a clear validation state. This suggests either the keypad hit target mismatched, the page state shifted unexpectedly, or the PIN login flow still has a navigation bug that breaks the learner journey before entry into the app.
+
+Next test step: recover by navigating directly into learner pages to evaluate the in-app learner experience independently of the PIN entry bug, then include both the flow quality and the blocker in the final summary.
+
+3. Learning Universe and subject flow
+The learner home at `/learn` is visually strong and immediately more child-friendly than the login route. It shows Lyla Rae as the active child, displays XP and streak, and presents a broad subject universe with progress percentages. This gives a strong sense of momentum and breadth, although the large number of subjects may feel slightly overwhelming for an age-8 learner without stronger prioritisation or recommended next steps.
+
+The Maths subject page works well as a progression map. Topics are shown with mastery percentages and short descriptions, and the route structure is easy to follow. Entering the topic moves the learner toward a Lumi-led lesson cleanly.
+
+4. Lesson experience and completion flow
+The lesson route loads and presents a focused interface with a text input, a hint button, and a finish button. This is a promising foundation, but in testing the live lesson interaction still feels incomplete from a learner perspective. Clicking the hint control did not visibly change the UI during this pass, and submitting a learner message did not show an observable conversational response in the browser state available during testing. That means the page structure exists, but the visible teaching loop did not clearly prove itself as working end to end in this run.
+
+The completion flow does work. Selecting "Finish for now" successfully exits the session and shows a session-complete screen with onward actions such as returning to the topic map or viewing achievements. This confirms there is at least a usable exit path and a sense of lesson closure, even though the core interactive tutoring behavior still needs closer validation and likely refinement.
+
+5. Confirmed strengths and blockers so far
+The strongest learner-facing areas are the visual identity, the home dashboard, the subject map structure, and the general sense of progression through XP, streaks, and mastery. The biggest blockers found during hands-on testing are the fragile learner login/PIN journey and the uncertain in-lesson response loop, which currently prevents confidence that Lumi is delivering a reliable child-ready teaching experience in the browser.
+
+6. Rewards, profile, and progress routes
+The achievements page is one of the clearest learner-facing successes. It communicates badge progress, earned rewards, XP gained from badges, and level progression in a way that feels motivating and understandable. The balance between locked and earned achievements gives the child a clear sense of what to work toward next.
+
+The profile page is simple and effective. It clearly shows Lyla Rae’s identity, avatar, XP, streak, age, year group, and learning mode, which makes the experience feel personal. The avatar area also hints at customisation potential, which is valuable for learner ownership.
+
+The progress page route loads, but the extracted content indicates that it may not currently expose a strong readable progress summary in the same way the other learner routes do. It likely needs a closer visual and functional pass because, compared with achievements and profile, it does not yet stand out as a clearly useful destination in the learner journey.
+
+7. Overall learner test status
+The learner experience is currently best described as a strong visual and structural prototype with several working progression surfaces, but with important gaps in the reliability of the core tutoring loop. Navigation among the main learner routes is broadly in place, the overall world-building is coherent, and rewards/profile systems already create meaningful child-facing motivation. However, the login entry experience and the visible lesson interaction remain the main product risks because they directly affect whether a child can consistently get into learning and feel guided by Lumi once inside.

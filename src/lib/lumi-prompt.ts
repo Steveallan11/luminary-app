@@ -8,6 +8,13 @@
 
 import { ContentManifest, LessonPhase, TopicLessonStructure } from '@/types';
 
+export interface VisualLumiImage {
+  url: string;
+  lumi_instruction: string;
+  source_type: string;
+  accuracy_score: number;
+}
+
 export interface LumiPromptParams {
   child_name: string;
   child_age: number;
@@ -20,6 +27,7 @@ export interface LumiPromptParams {
   game_results?: { game_type: string; score: number; max_score: number }[];
   structure?: TopicLessonStructure | null;
   current_phase?: LessonPhase;
+  visual_images?: VisualLumiImage[];
 }
 
 function getAgeCalibration(age: number): {
@@ -186,6 +194,7 @@ export function generateLumiSystemPrompt(params: LumiPromptParams): string {
   const cal = getAgeCalibration(child_age);
   const strugglesText = previous_struggles.length > 0 ? previous_struggles.join(', ') : 'None recorded yet';
   const contentSection = content_manifest ? '\n\n' + buildContentManifestSection(content_manifest) : '';
+  const visualSection = params.visual_images?.length ? '\n\n' + buildVisualLumiSection(params.visual_images) : '';
   const gameResultsSection = game_results ? buildGameResultsSection(game_results) : '';
   const lessonArcSection = '\n\n' + buildLessonStructureSection(structure, current_phase);
 
@@ -215,7 +224,7 @@ Your teaching approach:
 
 ═══ PRIOR CONTEXT ═══
 
-Things ${child_name} has found challenging before: ${strugglesText}. Be especially patient and encouraging if these come up. Their current mastery score for this topic: ${mastery_score}/100.${lessonArcSection}${contentSection}${gameResultsSection}
+Things ${child_name} has found challenging before: ${strugglesText}. Be especially patient and encouraging if these come up. Their current mastery score for this topic: ${mastery_score}/100.${lessonArcSection}${contentSection}${visualSection}${gameResultsSection}
 
 ═══ CHILD SAFETY (NON-NEGOTIABLE) ═══
 
@@ -237,6 +246,33 @@ Format your responses as follows:
 - Never use markdown headers
 - When including a [CONTENT:*] or [PHASE:*] signal, place it on its own line with no other text
 - Do not explain what the signals are — just use them naturally for the frontend`;}
+
+function buildVisualLumiSection(images: VisualLumiImage[]): string {
+  const lines: string[] = [];
+  lines.push('═══ VISUAL LUMI — TEACHING IMAGES ═══');
+  lines.push('');
+  lines.push('You have access to verified teaching images for this topic. Use [IMAGE:url] signals to show them at the right moment.');
+  lines.push('Each image has been accuracy-checked and approved for educational use.');
+  lines.push('');
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    lines.push(`Image ${i + 1} (${img.source_type}, accuracy: ${img.accuracy_score}/10):`);
+    lines.push(`  URL: ${img.url}`);
+    lines.push(`  Teaching instruction: ${img.lumi_instruction}`);
+    lines.push('');
+  }
+
+  lines.push('RULES FOR VISUAL SIGNALS:');
+  lines.push('- Place [IMAGE:url] on its own line with no other text');
+  lines.push('- Always introduce the image with a sentence before the signal');
+  lines.push('- After showing an image, ask the child what they notice or observe');
+  lines.push('- Use images during the explore or anchor phase for maximum impact');
+  lines.push('- Only show each image once unless the child asks to see it again');
+  lines.push('- Follow the teaching instruction provided with each image');
+
+  return lines.join('\n');
+}
 
 export function generateHintPrompt(currentPhase?: LessonPhase): string {
   return `The child has pressed the hint button during the ${currentPhase ?? 'current'} phase. Give a gentle, encouraging hint that points them in the right direction without giving the answer away. Start with 'No worries at all! Here\'s a little nudge...'`;

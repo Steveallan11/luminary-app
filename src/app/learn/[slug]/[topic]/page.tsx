@@ -33,6 +33,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   contentSignals?: ParsedContentSignal[];
+  imageSignals?: { url: string }[];
   phase?: LessonPhase;
 }
 
@@ -368,6 +369,12 @@ export default function LessonPage() {
                 updateAssistantMessage(assistantMsgId, (message) => ({
                   ...message,
                   contentSignals: parsed.content_signals,
+                }));
+              }
+              if (parsed.image_signals) {
+                updateAssistantMessage(assistantMsgId, (message) => ({
+                  ...message,
+                  imageSignals: parsed.image_signals,
                 }));
               }
               if (parsed.phase) {
@@ -745,6 +752,32 @@ export default function LessonPage() {
                                   childAge={MOCK_CHILD.age}
                                   onGameComplete={(result) => awardXp(result.xpEarned)}
                                 />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {message.role === 'assistant' && message.imageSignals && message.imageSignals.length > 0 && (
+                          <div className="w-full space-y-3">
+                            {message.imageSignals.map((img, imgIdx) => (
+                              <div
+                                key={`${message.id}-img-${imgIdx}`}
+                                className="overflow-hidden rounded-[26px] border border-white/10 bg-slate-950/60"
+                              >
+                                <img
+                                  src={img.url}
+                                  alt="Teaching visual from Lumi"
+                                  className="w-full rounded-t-[26px] object-cover"
+                                  style={{ maxHeight: '360px' }}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                                <div className="flex items-center gap-2 px-4 py-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-light/40">Visual Lumi</span>
+                                  <span className="h-1 w-1 rounded-full bg-emerald-400" />
+                                  <span className="text-[10px] text-emerald-400">Verified</span>
+                                </div>
                               </div>
                             ))}
                           </div>

@@ -151,6 +151,27 @@ export function stripSignals(text: string): string {
     .trim();
 }
 
+export interface ParsedImageSignal {
+  url: string;
+}
+
+export function parseImageSignals(text: string): ParsedImageSignal[] {
+  const matches = text.match(/\[IMAGE:(https?:\/\/[^\]]+)\]/g) ?? [];
+  return matches.map((match) => {
+    const [, url] = match.match(/\[IMAGE:(https?:\/\/[^\]]+)\]/) ?? [];
+    return { url: url ?? '' };
+  }).filter((entry) => entry.url);
+}
+
+export function stripAllSignals(text: string): string {
+  return text
+    .replace(/\[CONTENT:[^\]]+\]/g, '')
+    .replace(/\[PHASE:[^\]]+\]/g, '')
+    .replace(/\[IMAGE:[^\]]+\]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function parsePhaseSignal(text: string): ParsedPhaseSignal | null {
   const match = text.match(/\[PHASE:([a-z]+)\]/);
   if (!match) return null;

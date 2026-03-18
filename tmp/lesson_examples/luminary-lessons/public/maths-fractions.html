@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Lyla Rae — Fractions with Lumi 🔢</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:'Nunito',sans-serif;background:#080d1f !important;color:#f0f4f8 !important;overflow:hidden;}
+html{background-color:#080d1f !important;}
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+.star{position:absolute;border-radius:50%;background:white;animation:twinkle var(--d) ease-in-out infinite var(--delay);}
+@keyframes twinkle{0%,100%{opacity:0.12}50%{opacity:0.7}}
+.app{position:fixed;inset:0;display:flex;flex-direction:column;max-width:480px;margin:0 auto;z-index:1;background:#080d1f !important;}
+.hdr{padding:14px 18px 8px;background:#080d1f !important;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.orb{width:38px;height:38px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#818cf8,#c084fc,#fb7185);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 14px rgba(192,132,252,0.5);animation:glow 3s ease-in-out infinite;}
+@keyframes glow{0%,100%{box-shadow:0 0 14px rgba(192,132,252,0.4)}50%{box-shadow:0 0 26px rgba(192,132,252,0.7)}}
+.hi{flex:1;}
+.hs{font-size:9px;color:#8b5cf6;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;}
+.ht{font-size:15px;font-weight:800;color:#fff;}
+.xpc{display:flex;align-items:center;gap:4px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:6px 12px;border-radius:999px;font-size:13px;font-weight:800;color:#fbbf24;flex-shrink:0;}
+.mb{height:3px;background:rgba(139,92,246,0.1);margin:0 18px 5px;border-radius:2px;overflow:hidden;}
+.mf{height:100%;background:#8b5cf6;border-radius:2px;transition:width 0.8s ease;width:0%;}
+.pb{display:flex;align-items:center;padding:0 18px 6px;gap:2px;flex-shrink:0;}
+.pi{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.pc{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all 0.4s;background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.1);}
+.pc.done{background:rgba(139,92,246,0.3);border-color:#8b5cf6;}
+.pc.active{background:#8b5cf6;border-color:#8b5cf6;box-shadow:0 0 12px rgba(139,92,246,0.5);}
+.pl{font-size:7px;color:rgba(255,255,255,0.45);font-weight:700;white-space:nowrap;}
+.pl.active{color:#8b5cf6;}
+.pln{flex:1;height:2px;background:rgba(255,255,255,0.07);margin-bottom:12px;}
+.chat{flex:1;overflow-y:auto;padding:4px 14px 10px;display:flex;flex-direction:column;gap:10px;background:#080d1f !important;}
+.chat::-webkit-scrollbar{width:3px;}
+.chat::-webkit-scrollbar-thumb{background:rgba(139,92,246,0.3);border-radius:2px;}
+@keyframes mi{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.lm{display:flex;gap:8px;align-items:flex-start;animation:mi 0.3s ease both;}
+.la{width:28px;height:28px;border-radius:50%;flex-shrink:0;margin-top:2px;background:linear-gradient(135deg,#818cf8,#c084fc);display:flex;align-items:center;justify-content:center;font-size:14px;animation:glow 3s ease-in-out infinite;}
+.lb{background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:4px 16px 16px 16px;padding:11px 14px;max-width:calc(100% - 44px);font-size:14px;line-height:1.75;color:#f0f4f8;}
+.lb em{color:#c4b5fd;font-style:normal;font-weight:800;}
+.lb strong{color:#fff;}
+.cm{display:flex;justify-content:flex-end;animation:mi 0.3s ease both;}
+.cb{background:#8b5cf6;border-radius:16px 4px 16px 16px;padding:11px 15px;max-width:82%;font-size:14px;line-height:1.6;color:#fff;font-weight:600;}
+.bnr{background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);border-radius:12px;padding:9px 13px;font-size:12px;font-weight:800;color:#c4b5fd;animation:mi 0.3s ease both;}
+.tr{display:flex;gap:8px;align-items:center;animation:mi 0.3s ease both;}
+.tb{background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:4px 16px 16px 16px;padding:11px 14px;display:flex;gap:4px;}
+.td{width:6px;height:6px;border-radius:50%;background:#8b5cf6;opacity:0.5;}
+.td:nth-child(1){animation:bounce 1.4s 0ms ease-in-out infinite;}
+.td:nth-child(2){animation:bounce 1.4s 200ms ease-in-out infinite;}
+.td:nth-child(3){animation:bounce 1.4s 400ms ease-in-out infinite;}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:0.4}30%{transform:translateY(-5px);opacity:1}}
+.cc{background:linear-gradient(135deg,rgba(139,92,246,0.15),rgba(139,92,246,0.04));border:1px solid rgba(139,92,246,0.3);border-radius:18px;padding:16px;}
+.ccl{font-size:9px;font-weight:800;color:#8b5cf6;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px;}
+.cct{font-family:'Fraunces',serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:3px;}
+.ccs{font-size:12px;color:#c4b5fd;font-weight:700;margin-bottom:8px;}
+.ccb{font-size:13px;color:#e8e0ff;line-height:1.6;}
+.cci{font-size:42px;float:right;margin:-4px -4px 0 10px;line-height:1;}
+.fv{background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:16px;padding:14px;}
+.fvt{font-size:11px;font-weight:800;color:#c4b5fd;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+.fbr{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.fbl{font-size:16px;font-weight:900;color:#fff;min-width:28px;text-align:center;}
+.fbt{flex:1;height:26px;background:rgba(255,255,255,0.06);border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);display:flex;}
+.fbf{height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;}
+.fbn{font-size:11px;color:rgba(255,255,255,0.88);min-width:72px;font-weight:700;}
+.gc{background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:18px;padding:14px;}
+.gt{font-size:13px;font-weight:800;color:#c4b5fd;margin-bottom:3px;}
+.gs{font-size:11px;color:rgba(255,255,255,0.85);margin-bottom:12px;}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.mc{display:flex;flex-direction:column;gap:6px;}
+.mi{background:rgba(255,255,255,0.07);border:2px solid rgba(255,255,255,0.12);border-radius:11px;padding:10px 8px;cursor:pointer;font-size:13px;font-weight:700;color:#f0f4f8;text-align:center;min-height:44px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.mi:hover{background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.4);}
+.mi.sel{background:rgba(139,92,246,0.25);border-color:#8b5cf6;color:#fff;}
+.mi.ok{background:rgba(16,185,129,0.15);border-color:#10b981;color:#6ee7b7;}
+.gscr{margin-top:10px;text-align:center;font-size:12px;color:rgba(255,255,255,0.9);font-weight:700;}
+.xpp{position:fixed;bottom:110px;right:28px;font-size:15px;font-weight:900;color:#fbbf24;pointer-events:none;z-index:999;text-shadow:0 0 12px rgba(251,191,36,0.6);}
+.cov{position:fixed;inset:0;z-index:500;background:radial-gradient(ellipse at 50% 30%,#1a1133,#080d1f);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;text-align:center;overflow-y:auto;}
+.ia{padding:6px 14px 18px;background:#080d1f !important;flex-shrink:0;}
+.ir{display:flex;gap:10px;align-items:flex-end;margin-bottom:7px;}
+.txta{flex:1;background:rgba(139,92,246,0.08);border:1.5px solid rgba(139,92,246,0.25);border-radius:16px;padding:11px 14px;color:#f0f4f8;font-family:'Nunito',sans-serif;font-size:14px;resize:none;outline:none;min-height:46px;line-height:1.5;}
+.txta:focus{border-color:rgba(139,92,246,0.55);}
+.txta::placeholder{color:rgba(255,255,255,0.4);}
+.sndb{width:46px;height:46px;border-radius:13px;background:#8b5cf6;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:19px;color:#fff;flex-shrink:0;transition:all 0.2s;box-shadow:0 4px 16px rgba(139,92,246,0.4);}
+.sndb:hover{transform:scale(1.07);}
+.sndb:disabled{opacity:0.35;cursor:not-allowed;transform:none;}
+.br{display:flex;align-items:center;justify-content:space-between;}
+.hntb{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:9px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:800;color:rgba(255,255,255,0.75);font-family:'Nunito',sans-serif;transition:all 0.2s;}
+.hntb:hover{background:rgba(255,255,255,0.1);color:#fff;}
+.hntb:disabled{opacity:0.3;cursor:not-allowed;}
+.stxt{font-size:11px;color:rgba(255,255,255,0.42);font-weight:600;}
+.qrs{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:8px;}
+.qrb{background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);border-radius:999px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;color:#c4b5fd;font-family:'Nunito',sans-serif;transition:all 0.2s;}
+.qrb:hover{background:rgba(139,92,246,0.22);color:#fff;}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<div class="app">
+  <div class="hdr">
+    <div class="orb">🦋</div>
+    <div class="hi"><div class="hs">🔢 Maths · KS2 · Year 4</div><div class="ht">Fractions</div></div>
+    <div class="xpc">⭐ <span id="xpv">0</span></div>
+  </div>
+  <div class="mb"><div class="mf" id="mf"></div></div>
+  <div class="pb" id="pb"></div>
+  <div class="chat" id="chat"></div>
+  <div class="ia">
+    <div class="qrs" id="qrs"></div>
+    <div class="ir">
+      <textarea class="txta" id="inp" placeholder="Type anything — questions welcome! 😊" rows="1"></textarea>
+      <button class="sndb" id="sndb" onclick="send()">➤</button>
+    </div>
+    <div class="br">
+      <button class="hntb" id="hntb" onclick="hint()">💡 Hint</button>
+      <span class="stxt" id="stxt"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────
+// This calls YOUR proxy server instead of Anthropic directly.
+// On Vercel: the proxy is at /api/lumi (same domain, no CORS issues)
+// Locally: set PROXY_URL to http://localhost:3000/api/lumi
+const PROXY_URL = '/api/lumi';
+
+const SYSTEM = `You are Lumi, Lyla Rae's personal AI learning companion. Lyla Rae is 8 years old, Year 4 KS2.
+
+Be warm, funny, enthusiastic. Like a brilliant best friend who knows everything. Never a teacher.
+
+CRITICAL: Always respond to what Lyla actually says first. Answer her questions fully. If confused try a different analogy. Never skip past what she said to follow the script.
+
+Short messages: max 3 sentences then a question. Max 20 words per sentence. 1-2 emojis. Never say wrong.
+
+LESSON: FRACTIONS
+Phase signals at END of message only:
+[PHASE:explore]
+[PHASE:anchor]
+[PHASE:game]
+[PHASE:create]
+[PHASE:check]
+[PHASE:celebrate]
+
+Content signals inline:
+[SHOW:bars] fraction bar visual
+[SHOW:game] matching game
+[SHOW:celebrate] celebration screen
+
+SPARK: Concept card visible. Ask about sharing pizza with 3 friends equally. When engaged signal [PHASE:explore]
+
+EXPLORE: Guide discovery. Bottom number equals total equal parts. Top equals how many you have. Use [SHOW:bars] when showing 1/2 1/4 3/4. Answer ALL questions fully first. When understands signal [PHASE:anchor]
+
+ANCHOR: Pretend I am a baby who knows nothing. Can you explain fractions? When solid signal [PHASE:game]
+
+GAME: Lets play a matching game then [SHOW:game]. After result signal [PHASE:create]
+
+CREATE: Open Lyla's Pizza Palace! Menu with 3 or more items using fractions. When done signal [PHASE:check]
+
+CHECK: 3 casual questions: what does 5 mean in 3/5, which bigger 3/4 or 1/4, 10 sweets eat 5 what fraction left. When done signal [PHASE:celebrate]
+
+CELEBRATE: [SHOW:celebrate] then specific praise and fun fact: chefs use fractions every single day.`;
+
+// ── STATE ────────────────────────────────────────────
+const PHASES=['spark','explore','anchor','game','create','check','celebrate'];
+const PICONS=['⚡','🔭','⚓','🎮','🎨','✅','🎉'];
+const PLBLS=['Spark','Explore','Anchor','Game','Create','Check','Done!'];
+const BNRS={explore:'⚡ Spark done! Time to explore 🔭',anchor:"🔭 Let's lock it in ⚓",game:'⚓ Brilliant! Game time 🎮',create:'🎮 Done! Creative challenge 🎨',check:'🎨 Love it! Final check ✅',celebrate:'✅ All done! 🎉'};
+const PAIRS=[{f:'1/2',m:'One half'},{f:'1/4',m:'One quarter'},{f:'3/4',m:'Three quarters'},{f:'2/3',m:'Two thirds'}];
+const shuffle=a=>[...a].sort(()=>Math.random()-0.5);
+
+let hist=[],phase=0,xp=0,mas=0,hints=0,busy=false;
+let mSel=null,mCorr=0,matched=new Set(),gameDone=false;
+const LP=shuffle(PAIRS),RP=shuffle(PAIRS);
+
+// ── STARS ────────────────────────────────────────────
+(()=>{const el=document.getElementById('stars');for(let i=0;i<70;i++){const s=document.createElement('div');s.className='star';const z=Math.random()*2.5+1;s.style.cssText=`width:${z}px;height:${z}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${2+Math.random()*4}s;--delay:${Math.random()*4}s`;el.appendChild(s);}})();
+
+// ── PHASE BAR ────────────────────────────────────────
+function buildPB(){
+  const el=document.getElementById('pb');
+  PHASES.forEach((ph,i)=>{
+    const item=document.createElement('div');item.className='pi';
+    item.innerHTML=`<div class="pc ${i===0?'active':''}" id="pc${i}">${PICONS[i]}</div><div class="pl ${i===0?'active':''}" id="pl${i}">${PLBLS[i]}</div>`;
+    el.appendChild(item);
+    if(i<6){const ln=document.createElement('div');ln.className='pln';el.appendChild(ln);}
+  });
+}
+function setPhase(p){
+  phase=p;
+  PHASES.forEach((_,i)=>{
+    const c=document.getElementById('pc'+i),l=document.getElementById('pl'+i);
+    c.className='pc'+(i<p?' done':i===p?' active':'');
+    c.textContent=i<p?'✓':PICONS[i];
+    l.className='pl'+(i===p?' active':'');
+  });
+}
+
+// ── CHAT HELPERS ─────────────────────────────────────
+const ch=()=>document.getElementById('chat');
+const sc=()=>setTimeout(()=>ch().scrollTo({top:ch().scrollHeight,behavior:'smooth'}),60);
+
+function showT(){const e=document.createElement('div');e.className='tr';e.id='typ';e.innerHTML='<div class="la">🦋</div><div class="tb"><div class="td"></div><div class="td"></div><div class="td"></div></div>';ch().appendChild(e);sc();}
+function hideT(){const t=document.getElementById('typ');if(t)t.remove();}
+function addL(html){hideT();const e=document.createElement('div');e.className='lm';e.innerHTML=`<div class="la">🦋</div><div class="lb">${html}</div>`;ch().appendChild(e);sc();}
+function addC(t){const e=document.createElement('div');e.className='cm';e.innerHTML=`<div class="cb">${t}</div>`;ch().appendChild(e);sc();}
+function addBnr(t){const e=document.createElement('div');e.className='bnr';e.textContent=t;ch().appendChild(e);sc();}
+function fmt(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');}
+
+// XP
+function addXp(n){xp+=n;document.getElementById('xpv').textContent=xp;const p=document.createElement('div');p.className='xpp';p.textContent=`+${n} XP ⭐`;p.style.animation='xpf 1.4s ease both';document.body.appendChild(p);setTimeout(()=>p.remove(),1400);}
+function updM(d){mas=Math.min(100,Math.max(0,mas+d));document.getElementById('mf').style.width=mas+'%';}
+
+// Quick replies
+const QR_BY_PHASE={
+  spark:['I think it means sharing equally','Can you show me an example?','Is a half bigger than a quarter?','I am ready!'],
+  explore:['Can you explain that differently?','How do you know?','Can I try one?','Why does that work?'],
+  anchor:['So the top number is parts?','The bottom number is the whole?','Can you check my thinking?','I nearly get it!'],
+  game:['I want to try!','Can you give me an easier one?','I think the answer is...','One more please!'],
+  create:['Here is my answer:','Can I make my own example?','Is this right?','Can you help me start?'],
+  check:['I am confident now!','Can you test me?','Let me explain it back','I want one last challenge!'],
+  done:['That was fun!','What should I learn next?','I am proud of that!','Can we do another one?']
+};
+function setQR(a){document.getElementById('qrs').innerHTML=a.map(r=>`<button class="qrb" onclick="useQR(this)">${r}</button>`).join('');}
+function clQR(){document.getElementById('qrs').innerHTML='';}
+function useQR(el){document.getElementById('inp').value=el.textContent;send();}
+function inferQRContext(raw){
+  const t=(raw||'').toLowerCase();
+  if(t.includes('what do you think')||t.includes('before we start')||t.includes('ready to begin')||t.includes('pizza'))return ['I think it means sharing equally','I know halves and quarters','Can you show me with pizza?','I am ready!'];
+  if(t.includes('can you explain')||t.includes('why')||t.includes('how do you know'))return ['Can you explain that differently?','Why does that happen?','How do you know?','Can I try one?'];
+  if(t.includes('your turn')||t.includes('have a go')||t.includes('try this'))return ['I think the answer is...','Can I have a clue?','Let me try!','I am not sure yet'];
+  if(t.includes('make your own')||t.includes('create'))return ['Here is my answer:','Can I make my own one?','Can you check mine?','Help me start'];
+  if(t.includes('check')||t.includes('quiz')||t.includes('test'))return ['I am ready!','My answer is...','Can you give one more?','I want a challenge!'];
+  return null;
+}
+function refreshQR(raw=''){
+  const phaseName=PHASES[phase]||'spark';
+  setQR(inferQRContext(raw)||QR_BY_PHASE[phaseName]||QR_BY_PHASE.spark);
+}
+
+// ── COMPONENTS ───────────────────────────────────────
+function addConceptCard(){
+  const e=document.createElement('div');e.className='cc';
+  e.innerHTML=`<div class="ccl">Today's big idea</div><div class="cci">🍕</div><div class="cct">Fractions</div><div class="ccs">Splitting things into perfectly equal parts</div><div class="ccb">A fraction shows how many equal pieces you have out of a total — once you get this, you will spot fractions everywhere!</div>`;
+  ch().appendChild(e);sc();
+}
+
+function addPizza(){
+  const e=document.createElement('div');e.className='fv';
+  e.innerHTML=`<div class="fvt">🍕 Picture it like a pizza...</div>
+    <div style="display:flex;justify-content:center;padding:8px 0 4px">
+      <div style="width:190px;height:190px;border-radius:999px;position:relative;background:conic-gradient(#f59e0b 0 90deg,#fde68a 90deg 180deg,#f59e0b 180deg 270deg,#fde68a 270deg 360deg);border:6px solid rgba(255,255,255,0.14);box-shadow:0 14px 30px rgba(0,0,0,0.28)">
+        <div style="position:absolute;left:50%;top:0;bottom:0;width:3px;background:rgba(255,255,255,0.45);transform:translateX(-50%)"></div>
+        <div style="position:absolute;top:50%;left:0;right:0;height:3px;background:rgba(255,255,255,0.45);transform:translateY(-50%)"></div>
+        <div style="position:absolute;inset:28px;border-radius:999px;border:2px dashed rgba(120,53,15,0.45)"></div>
+        <div style="position:absolute;right:18px;top:18px;background:#fff;color:#7c2d12;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900">1/4</div>
+      </div>
+    </div>
+    <div class="fbn" style="margin-top:10px">This pizza is split into <strong>4 equal parts</strong>. One slice is <strong>one quarter</strong>.</div>`;
+  ch().appendChild(e);sc();
+}
+
+function addBars(){
+  const e=document.createElement('div');e.className='fv';
+  e.innerHTML=`<div class="fvt">🔭 See how they work...</div>
+    <div class="fbr"><div class="fbl">½</div><div class="fbt"><div class="fbf" style="width:50%;background:#8b5cf6">1 of 2</div></div><div class="fbn">One half</div></div>
+    <div class="fbr"><div class="fbl">¼</div><div class="fbt"><div class="fbf" style="width:25%;background:#0ea5e9">1 of 4</div></div><div class="fbn">One quarter</div></div>
+    <div class="fbr"><div class="fbl">¾</div><div class="fbt"><div class="fbf" style="width:75%;background:#f59e0b">3 of 4</div></div><div class="fbn">Three quarters</div></div>
+    <div class="fbr"><div class="fbl">⅔</div><div class="fbt"><div class="fbf" style="width:66.6%;background:#fb7185">2 of 3</div></div><div class="fbn">Two thirds</div></div>`;
+  ch().appendChild(e);sc();
+}
+
+function addGame(){
+  const e=document.createElement('div');e.className='gc';e.id='game';
+  e.innerHTML=`<div class="gt">🎮 Match It!</div><div class="gs">Tap a fraction, then tap its meaning!</div>
+    <div class="mg">
+      <div class="mc">${LP.map(p=>`<div class="mi" data-id="${p.f}" data-s="L" onclick="tap(this)">${p.f}</div>`).join('')}</div>
+      <div class="mc">${RP.map(p=>`<div class="mi" data-id="${p.f}" data-s="R" onclick="tap(this)">${p.m}</div>`).join('')}</div>
+    </div>
+    <div class="gscr" id="gscr">Match all 4 pairs! 🎯</div>`;
+  ch().appendChild(e);sc();
+  document.getElementById('inp').disabled=true;
+  document.getElementById('sndb').disabled=true;
+}
+
+function tap(el){
+  if(matched.has(el.dataset.id)||gameDone)return;
+  if(!mSel){document.querySelectorAll('.mi.sel').forEach(e=>e.classList.remove('sel'));el.classList.add('sel');mSel=el;}
+  else{
+    if(mSel===el){el.classList.remove('sel');mSel=null;return;}
+    if(mSel.dataset.s===el.dataset.s){mSel.classList.remove('sel');mSel=el;el.classList.add('sel');return;}
+    if(mSel.dataset.id===el.dataset.id){
+      mSel.classList.remove('sel');mSel.classList.add('ok');el.classList.add('ok');
+      matched.add(el.dataset.id);mCorr++;addXp(8);updM(8);
+      document.getElementById('gscr').textContent=mCorr===4?'🎉 Perfect!':'✓ '+mCorr+' of 4 matched!';
+      if(mCorr===4){gameDone=true;document.getElementById('inp').disabled=false;document.getElementById('sndb').disabled=false;setTimeout(()=>callLumi('[SYSTEM: Lyla matched all 4 fraction pairs perfectly — a perfect score! Celebrate her specifically then continue.]',false),700);}
+    }else{mSel.classList.remove('sel');el.style.animation='shake 0.4s';mSel.style.animation='shake 0.4s';setTimeout(()=>{el.style.animation='';if(mSel)mSel.style.animation='';mSel=null;},500);}
+    mSel=null;
+  }
+}
+
+function showCelebrate(){
+  const ov=document.createElement('div');ov.className='cov';
+  ov.innerHTML=`
+    <div style="font-size:52px;margin-bottom:14px">🦋</div>
+    <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:900;color:#fff;margin-bottom:6px;line-height:1.2">Lyla Rae, you were<br>absolutely brilliant! ⭐</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:18px">Fractions · ${mas}% Mastery · ${mas>=80?'Strong!':'Secure!'}</div>
+    <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:14px;padding:14px 22px;margin-bottom:16px;display:inline-block">
+      <div style="font-family:'Fraunces',serif;font-size:42px;font-weight:900;color:#fbbf24;line-height:1">+${xp} XP</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.8);font-weight:700;margin-top:4px">EARNED TODAY</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:13px 16px;margin-bottom:16px;text-align:left;width:100%">
+      <div style="font-size:10px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px">💡 Fun fact to share!</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.95);line-height:1.6">Every time a chef says half a cup of flour or a quarter teaspoon of salt — that is exactly what you learned today. You now think like a professional chef! 👨‍🍳</div>
+    </div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:16px">Next up: <strong style="color:#c4b5fd">the secret pattern inside the 3 times table — it will blow your mind! 🤯</strong></div>
+    <button onclick="this.closest('.cov').remove()" style="background:#8b5cf6;border:none;border-radius:14px;padding:14px 32px;font-size:15px;font-weight:800;color:#fff;cursor:pointer;width:100%;font-family:'Nunito',sans-serif;box-shadow:0 6px 24px rgba(139,92,246,0.4)">🎉 See you next time, Lyla!</button>`;
+  document.body.appendChild(ov);
+}
+
+// ── MAIN API CALL ─────────────────────────────────────
+async function callLumi(msg,showB=true){
+  if(busy)return;
+  busy=true;clQR();
+  if(showB&&msg&&!msg.startsWith('[')){addC(msg);hist.push({role:'user',content:msg});addXp(3);updM(3);}
+  else if(msg)hist.push({role:'user',content:msg});
+  document.getElementById('inp').disabled=true;
+  document.getElementById('sndb').disabled=true;
+  document.getElementById('hntb').disabled=true;
+  document.getElementById('stxt').textContent='Lumi is thinking... 🦋';
+  showT();
+
+  try{
+    const res=await fetch(PROXY_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,system:SYSTEM,messages:hist})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    let raw=data?.content?.[0]?.text||'';
+    if(!raw)throw new Error('empty');
+
+    const pm=raw.match(/\[PHASE:(\w+)\]\s*$/m);
+    let np=phase;
+    if(pm){raw=raw.replace(/\[PHASE:\w+\]\s*$/m,'').trim();const ni=PHASES.indexOf(pm[1]);if(ni>phase){np=ni;setTimeout(()=>{addBnr(BNRS[pm[1]]||'');setPhase(ni);refreshQR(raw);addXp(10);updM(8);},450);}}
+
+    const shows=[...raw.matchAll(/\[SHOW:(\w+)\]/g)].map(m=>m[1]);
+    raw=raw.replace(/\[SHOW:\w+\]/g,'').trim();
+    hist.push({role:'assistant',content:data?.content?.[0]?.text||raw});
+    hideT();
+    if(raw)addL(fmt(raw));
+
+    for(const s of shows){
+      await new Promise(r=>setTimeout(r,300));
+      if(s==='bars')addBars();
+      if(s==='pizza')addPizza();
+      if(s==='game'){addGame();busy=false;return;}
+      if(s==='celebrate')setTimeout(()=>showCelebrate(),600);
+    }
+
+    refreshQR(raw);
+    document.getElementById('stxt').textContent='';
+  }catch(e){
+    console.error(e);hideT();
+    addL("Oops! Lumi had a little hiccup 🌟 Type anything to try again!");
+    document.getElementById('stxt').textContent='';
+  }
+  const inGame=phase===3&&!gameDone;
+  document.getElementById('inp').disabled=inGame;
+  document.getElementById('sndb').disabled=inGame;
+  document.getElementById('hntb').disabled=false;
+  busy=false;
+}
+
+function send(){const i=document.getElementById('inp');const t=i.value.trim();if(!t||busy)return;i.value='';i.style.height='';callLumi(t,true);}
+function hint(){if(busy)return;hints++;updM(-3);document.getElementById('stxt').textContent=`${hints} hint${hints>1?'s':''} used`;callLumi('[SYSTEM: Lyla pressed hint. Give a warm gentle nudge without the full answer. Start with: No worries at all! Here is a little clue...]',false);}
+
+document.getElementById('inp').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+document.getElementById('inp').addEventListener('input',function(){this.style.height='';this.style.height=Math.min(this.scrollHeight,100)+'px';});
+
+// ── INIT ─────────────────────────────────────────────
+buildPB();setPhase(0);addConceptCard();refreshQR();
+callLumi('[START: Begin the fractions lesson for Lyla Rae. The concept card is visible. Be warm, excited, and start with the pizza question.]',false);
+</script>
+<style>
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes xpf{0%{opacity:1;transform:translateY(0)}60%{opacity:1;transform:translateY(-36px)}100%{opacity:0;transform:translateY(-60px)}}
+</style>
+</body>
+</html>

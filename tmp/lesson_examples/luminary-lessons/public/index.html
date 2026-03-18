@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luminary — Choose a Lesson</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100%;font-family:'Nunito',sans-serif;background:radial-gradient(circle at top,#1c103b 0%,#10071f 38%,#06080f 100%);color:#f8fafc;}
+body{padding:28px 18px 40px;display:flex;justify-content:center;}
+.shell{width:100%;max-width:430px;position:relative;}
+.hero{position:relative;overflow:hidden;border-radius:28px;padding:26px 22px 22px;background:linear-gradient(180deg,rgba(32,18,63,0.95),rgba(14,8,30,0.96));border:1px solid rgba(255,255,255,0.1);box-shadow:0 24px 60px rgba(0,0,0,0.35);margin-bottom:18px;}
+.hero:before,.hero:after{content:'';position:absolute;border-radius:999px;filter:blur(10px);opacity:.55;pointer-events:none;}
+.hero:before{width:160px;height:160px;right:-30px;top:-40px;background:rgba(139,92,246,.26);}
+.hero:after{width:120px;height:120px;left:-28px;bottom:-38px;background:rgba(56,189,248,.18);}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#fde68a;margin-bottom:16px;position:relative;z-index:1;}
+.logo{font-size:44px;line-height:1;position:relative;z-index:1;margin-bottom:12px;}
+h1{font-family:'Fraunces',serif;font-size:34px;line-height:1.05;font-weight:900;color:#fff;margin-bottom:10px;position:relative;z-index:1;}
+p.lead{font-size:15px;line-height:1.6;color:rgba(255,255,255,0.78);position:relative;z-index:1;max-width:34ch;}
+.tip{margin-top:16px;font-size:13px;color:#c4b5fd;position:relative;z-index:1;font-weight:800;}
+.section{font-size:12px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.55);margin:16px 4px 12px;}
+.cards{display:grid;gap:14px;}
+.card{display:flex;align-items:center;gap:16px;padding:18px 18px;border-radius:24px;text-decoration:none;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.1);}
+.card:hover{transform:translateY(-3px);}
+.card:active{transform:translateY(-1px) scale(.995);}
+.card .icon{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;font-size:30px;flex-shrink:0;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
+.card .meta{flex:1;min-width:0;}
+.card .subj{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:1.6px;margin-bottom:5px;}
+.card .name{font-size:22px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:5px;}
+.card .desc{font-size:13px;line-height:1.45;color:rgba(255,255,255,.72);max-width:26ch;}
+.card .go{font-size:24px;color:rgba(255,255,255,.65);font-weight:900;}
+.maths{background:linear-gradient(135deg,rgba(38,21,72,.98),rgba(20,12,46,.98));}
+.maths:hover{box-shadow:0 18px 40px rgba(139,92,246,.22);border-color:rgba(139,92,246,.35);}
+.maths .subj{color:#c4b5fd;}
+.history{background:linear-gradient(135deg,rgba(46,25,3,.98),rgba(22,12,2,.98));}
+.history:hover{box-shadow:0 18px 40px rgba(245,158,11,.2);border-color:rgba(245,158,11,.35);}
+.history .subj{color:#fcd34d;}
+.foot{margin-top:18px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:13px;line-height:1.55;color:rgba(255,255,255,.68);}
+.foot strong{color:#fff;}
+</style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="badge">🦋 Luminary lesson chooser</div>
+      <div class="logo">🌙✨</div>
+      <h1>Choose your lesson, Lyla</h1>
+      <p class="lead">Pick what you feel like learning today. Once you tap a lesson, Lumi will start the adventure straight away with a short friendly intro.</p>
+      <div class="tip">No lesson should auto-open from this page now.</div>
+    </section>
+
+    <div class="section">Available lessons</div>
+    <section class="cards">
+      <a href="/maths-fractions.html" class="card maths">
+        <div class="icon">🍕</div>
+        <div class="meta">
+          <div class="subj">Maths · KS2 · Year 4</div>
+          <div class="name">Fractions</div>
+          <div class="desc">Learn halves, quarters, and equal sharing with pizza and visual bars.</div>
+        </div>
+        <div class="go">›</div>
+      </a>
+
+      <a href="/history-egyptians.html" class="card history">
+        <div class="icon">🏺</div>
+        <div class="meta">
+          <div class="subj">History · KS2 · Year 4</div>
+          <div class="name">Ancient Egyptians</div>
+          <div class="desc">Step into Ancient Egypt with pyramids, mummies, and a time-travel story opener.</div>
+        </div>
+        <div class="go">›</div>
+      </a>
+    </section>
+
+    <div class="foot"><strong>Tip:</strong> save this chooser page as the main link for testing. Each lesson page still auto-starts only after a lesson has been chosen.</div>
+  </main>
+</body>
+</html>
