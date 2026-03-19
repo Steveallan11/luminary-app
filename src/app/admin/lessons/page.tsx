@@ -151,19 +151,33 @@ export default function AdminLessonsPage() {
     setGenerationError(null);
 
     try {
+      const keyStageMap: Record<string, string> = {
+        '5-7': 'KS1',
+        '8-11': 'KS2',
+        '12-14': 'KS3',
+        '15-16': 'KS4',
+      };
+
       const res = await fetch('/api/admin/generate-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic_id: selectedTopicId,
-          topic_title: selectedTopic.title,
+          title: selectedTopic.title,
           subject_name: selectedSubject.name,
+          key_stage: keyStageMap[ageGroup] || 'KS2',
           age_group: ageGroup,
-          brief: briefData,
+          key_concepts: briefData.keyConcepts,
+          common_misconceptions: briefData.misconceptions,
+          real_world_examples: briefData.realWorldExamples,
+          curriculum_objectives: briefData.curriculumObjectives,
         }),
       });
 
-      if (!res.ok) throw new Error('Generation failed');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || error.details || `Generation failed: ${res.status}`);
+      }
 
       const lesson = await res.json();
       setGeneratedLessons((prev) => [lesson, ...prev]);
@@ -171,7 +185,9 @@ export default function AdminLessonsPage() {
       setActiveView('review');
       setGenerationError(null);
     } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : 'Generation failed');
+      const message = error instanceof Error ? error.message : 'Generation failed';
+      console.error('Generation error:', message);
+      setGenerationError(message);
     } finally {
       setGenerating(false);
     }

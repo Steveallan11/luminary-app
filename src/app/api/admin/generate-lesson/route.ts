@@ -16,7 +16,9 @@ import {
  */
 export async function POST(req: NextRequest) {
   try {
+    console.log('[generate-lesson] Request received');
     const body = await req.json();
+    console.log('[generate-lesson] Request body:', body);
 
     const brief: TopicBrief = {
       topic_id: body.topic_id,
@@ -24,10 +26,10 @@ export async function POST(req: NextRequest) {
       subject_name: body.subject_name,
       key_stage: body.key_stage ?? 'KS2',
       age_group: body.age_group ?? '8-11',
-      key_concepts: body.key_concepts ?? [],
-      common_misconceptions: body.common_misconceptions ?? [],
-      real_world_examples: body.real_world_examples ?? [],
-      curriculum_objectives: body.curriculum_objectives ?? [],
+      key_concepts: Array.isArray(body.key_concepts) ? body.key_concepts : (body.key_concepts?.split(',') ?? []).map((s: string) => s.trim()),
+      common_misconceptions: Array.isArray(body.common_misconceptions) ? body.common_misconceptions : (body.common_misconceptions?.split(',') ?? []).map((s: string) => s.trim()),
+      real_world_examples: Array.isArray(body.real_world_examples) ? body.real_world_examples : (body.real_world_examples?.split(',') ?? []).map((s: string) => s.trim()),
+      curriculum_objectives: Array.isArray(body.curriculum_objectives) ? body.curriculum_objectives : (body.curriculum_objectives?.split('\n') ?? []).map((s: string) => s.trim()).filter((s: string) => s.length > 0),
     };
 
     if (!brief.title || !brief.subject_name) {
@@ -37,7 +39,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log('[generate-lesson] Brief prepared:', brief);
     const structure = await generateLessonStructure(brief);
+    console.log('[generate-lesson] Structure generated successfully');
     const qualityScore = scoreLessonQuality(structure);
 
     // In production: save to Supabase
@@ -72,8 +76,10 @@ export async function POST(req: NextRequest) {
       generated_at: new Date().toISOString(),
     });
   } catch (error: unknown) {
-    console.error('Lesson generation error:', error);
+    console.error('[generate-lesson] Error:', error);
     const message = error instanceof Error ? error.message : 'Failed to generate lesson';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const stack = error instanceof Error ? error.stack : '';
+    console.error('[generate-lesson] Stack:', stack);
+    return NextResponse.json({ error: message, details: stack }, { status: 500 });
   }
 }

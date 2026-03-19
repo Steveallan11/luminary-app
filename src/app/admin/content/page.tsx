@@ -36,6 +36,13 @@ const ASSET_TYPES: { type: AssetType; label: string; icon: React.ReactNode; colo
   { type: 'check_questions', label: 'Check Qs', icon: <Check size={14} />, colour: '#14B8A6' },
 ];
 
+const AGE_GROUPS = [
+  { value: '5-7', label: 'Ages 5-7 (KS1)' },
+  { value: '8-11', label: 'Ages 8-11 (KS2)' },
+  { value: '12-14', label: 'Ages 12-14 (KS3)' },
+  { value: '15-16', label: 'Ages 15-16 (KS4)' },
+];
+
 export default function AdminContentPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'generate' | 'review'>('dashboard');
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
@@ -45,6 +52,7 @@ export default function AdminContentPage() {
   const [generatedContent, setGeneratedContent] = useState<TopicAsset[]>([]);
   const [reviewAsset, setReviewAsset] = useState<TopicAsset | null>(null);
   const [editJson, setEditJson] = useState('');
+  const [ageGroup, setAgeGroup] = useState<string>('8-11');
 
   const getTopicAssets = (topicId: string) => MOCK_TOPIC_ASSETS.filter((a) => a.topic_id === topicId);
 
@@ -80,7 +88,7 @@ export default function AdminContentPage() {
         body: JSON.stringify({
           topic_id: generateTopicId,
           asset_types: generateTypes,
-          age_group: '8-11',
+          age_group: ageGroup,
         }),
       });
 
