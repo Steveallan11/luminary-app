@@ -244,12 +244,21 @@ export default function AdminLessonsPage() {
         '15-16': 'KS4',
       };
 
+      // Estimated minutes based on Key Stage
+      const estimatedMinutesMap: Record<string, number> = {
+        'KS1': 20,
+        'KS2': 30,
+        'KS3': 45,
+        'KS4': 60,
+      };
+
       const topicTitle = useCustomTopic ? customTopicName : selectedTopic?.title;
       const subjectName = useCustomTopic ? customSubjectName : selectedSubject?.name;
 
       // For custom topics, we need to create a topic first
       let topicId = selectedTopicId;
       const keyStage = keyStageMap[ageGroup] || 'KS2';
+      const estimatedMinutes = estimatedMinutesMap[keyStage] || 30;
 
       if (useCustomTopic) {
         // Create a temporary topic in Supabase
@@ -260,16 +269,23 @@ export default function AdminLessonsPage() {
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '');
 
+        // We'll try to include estimated_minutes but handle the case where the column might not exist
+        const topicData: any = {
+          title: customTopicName,
+          subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
+          description: `Custom topic: ${customTopicName}`,
+          key_stage: keyStage,
+          slug: slug || `custom-${Date.now()}`,
+          order_index: 0,
+        };
+
+        // Only add estimated_minutes if we're sure it won't cause a crash, 
+        // but since we got an error before, we'll omit it for now or wrap in a safer way
+        // For now, let's omit it from the direct insert to avoid the crash you saw
+        
         const { data: newTopic, error: topicError } = await supabase
           .from('topics')
-          .insert({
-            title: customTopicName,
-            subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
-            description: `Custom topic: ${customTopicName}`,
-            key_stage: keyStage,
-            slug: slug || `custom-${Date.now()}`,
-            order_index: 0,
-          })
+          .insert(topicData)
           .select()
           .single();
 
@@ -289,8 +305,9 @@ export default function AdminLessonsPage() {
           topic_id: topicId,
           title: topicTitle,
           subject_name: subjectName,
-          key_stage: keyStageMap[ageGroup] || 'KS2',
+          key_stage: keyStage,
           age_group: ageGroup,
+          estimated_minutes: estimatedMinutes,
           brief: {
             key_concepts: briefData.keyConcepts,
             common_misconceptions: briefData.misconceptions,

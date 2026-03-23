@@ -13,6 +13,7 @@ export interface TopicBrief {
   subject_name: string;
   key_stage: string;
   age_group: '5-7' | '8-11' | '12-14' | '15-16';
+  estimated_minutes?: number;
   key_concepts: string[];
   common_misconceptions: string[];
   real_world_examples: string[];

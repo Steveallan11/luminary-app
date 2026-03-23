@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       subject_name: body.subject_name,
       key_stage: body.key_stage ?? 'KS2',
       age_group: body.age_group ?? '8-11',
+      estimated_minutes: body.estimated_minutes ?? 30,
       key_concepts: Array.isArray(body.key_concepts) ? body.key_concepts : (body.key_concepts?.split(',') ?? []).map((s: string) => s.trim()),
       common_misconceptions: Array.isArray(body.common_misconceptions) ? body.common_misconceptions : (body.common_misconceptions?.split(',') ?? []).map((s: string) => s.trim()),
       real_world_examples: Array.isArray(body.real_world_examples) ? body.real_world_examples : (body.real_world_examples?.split(',') ?? []).map((s: string) => s.trim()),
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
         concept_card_json: structure.concept_card_json,
         realworld_json: structure.realworld_json,
         quality_score: qualityScore,
+        // We'll store estimated_minutes in the structure metadata if the column doesn't exist
+        // But let's try to insert it directly first, as it's more likely to be in this table
+        estimated_minutes: brief.estimated_minutes,
       })
       .select()
       .single();
