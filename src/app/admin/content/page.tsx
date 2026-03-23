@@ -53,6 +53,14 @@ export default function AdminContentPage() {
   const [reviewAsset, setReviewAsset] = useState<TopicAsset | null>(null);
   const [editJson, setEditJson] = useState('');
   const [ageGroup, setAgeGroup] = useState<string>('8-11');
+  const [useCustomTopic, setUseCustomTopic] = useState(false);
+  const [customTopicName, setCustomTopicName] = useState('');
+  const [customSubjectId, setCustomSubjectId] = useState('');
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const getTopicAssets = (topicId: string) => MOCK_TOPIC_ASSETS.filter((a) => a.topic_id === topicId);
 
@@ -78,14 +86,14 @@ export default function AdminContentPage() {
 
 
   const handleGenerate = async () => {
-    if (!generateTopicId || generateTypes.length === 0) return;
+    if ((!useCustomTopic && !generateTopicId) || (useCustomTopic && (!customTopicName || !customSubjectId)) || generateTypes.length === 0) return;
     setGenerating(true);
 
     try {
-      const topic = ALL_TOPICS.find((t) => t.id === generateTopicId);
-      if (!topic) {
-        throw new Error("Topic not found");
-      }
+      let topicId = generateTopicId;
+      let topicTitle = '';
+      let subjectName = '';
+      let keyStage = '';
 
       const keyStageMap: Record<string, string> = {
         "5-7": "KS1",
@@ -93,6 +101,36 @@ export default function AdminContentPage() {
         "12-14": "KS3",
         "15-16": "KS4",
       };
+      keyStage = keyStageMap[ageGroup] || "KS2";
+
+      if (useCustomTopic) {
+        // Create custom topic in Supabase
+        const subject = MOCK_SUBJECTS.find(s => s.id === customSubjectId);
+        const { data: newTopic, error: topicError } = await supabase
+          .from('topics')
+          .insert({
+            title: customTopicName,
+            subject_id: customSubjectId === 'other' ? '00000000-0000-0000-0000-000000000000' : customSubjectId,
+            description: `Custom topic: ${customTopicName}`,
+            key_stage: keyStage,
+            slug: customTopicName.toLowerCase().replace(/\s+/g, '-'),
+          })
+          .select()
+          .single();
+
+        if (topicError || !newTopic) {
+          throw new Error(`Failed to create custom topic: ${topicError?.message}`);
+        }
+        topicId = newTopic.id;
+        topicTitle = customTopicName;
+        subjectName = subject?.name || "Custom Subject";
+      } else {
+        const topic = ALL_TOPICS.find((t) => t.id === generateTopicId);
+        if (!topic) throw new Error("Topic not found");
+        topicId = topic.id;
+        topicTitle = topic.title;
+        subjectName = MOCK_SUBJECTS.find((s) => s.id === topic.subject_id)?.name || "Unknown";
+      }
 
       // Queue the generation job in the background
       const res = await fetch("/api/admin/queue-generation", {
@@ -100,12 +138,12 @@ export default function AdminContentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "content",
-          topic_id: generateTopicId,
+          topic_id: topicId,
           asset_types: generateTypes,
           age_group: ageGroup,
-          key_stage: keyStageMap[ageGroup] || "KS2",
-          title: topic.title,
-          subject_name: MOCK_SUBJECTS.find((s) => s.id === topic.subject_id)?.name || "Unknown",
+          key_stage: keyStage,
+          title: topicTitle,
+          subject_name: subjectName,
         }),
       });
 
@@ -311,9 +349,6 @@ export default function AdminContentPage() {
           </p>
 
           <div className="mb-6">
-            <label className="block text-sm font-bold text-white mb-2">Select Topic</label>
-
-          <div className="mb-6">
             <label className="block text-sm font-bold text-white mb-2">Key Stage / Age Group</label>
             <select
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
@@ -327,21 +362,56 @@ export default function AdminContentPage() {
               ))}
             </select>
           </div>
-            <select
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
-              value={generateTopicId}
-              onChange={(e) => setGenerateTopicId(e.target.value)}
-            >
-              <option value="">Choose a topic...</option>
-              {ALL_TOPICS.map((t) => {
-                const subject = MOCK_SUBJECTS.find((s) => s.id === t.subject_id);
-                return (
-                  <option key={t.id} value={t.id}>
-                    {subject?.icon_emoji} {subject?.name} — {t.title}
-                  </option>
-                );
-              })}
-            </select>
+
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-bold text-white">Select Topic</label>
+              <button 
+                onClick={() => setUseCustomTopic(!useCustomTopic)}
+                className="text-xs text-amber hover:underline font-bold"
+              >
+                {useCustomTopic ? 'Select from curriculum' : 'Add custom topic'}
+              </button>
+            </div>
+
+            {useCustomTopic ? (
+              <div className="space-y-3 p-4 rounded-xl bg-white/5 border border-white/10">
+                <input
+                  type="text"
+                  placeholder="Topic Name (e.g., 'Photosynthesis')"
+                  className="w-full bg-navy border border-white/10 rounded-lg px-4 py-2 text-white text-sm"
+                  value={customTopicName}
+                  onChange={(e) => setCustomTopicName(e.target.value)}
+                />
+                <select
+                  className="w-full bg-navy border border-white/10 rounded-lg px-4 py-2 text-white text-sm"
+                  value={customSubjectId}
+                  onChange={(e) => setCustomSubjectId(e.target.value)}
+                >
+                  <option value="">Select Subject...</option>
+                  {MOCK_SUBJECTS.map(s => (
+                    <option key={s.id} value={s.id}>{s.icon_emoji} {s.name}</option>
+                  ))}
+                  <option value="other">Other / General</option>
+                </select>
+              </div>
+            ) : (
+              <select
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
+                value={generateTopicId}
+                onChange={(e) => setGenerateTopicId(e.target.value)}
+              >
+                <option value="">Choose a topic...</option>
+                {ALL_TOPICS.map((t) => {
+                  const subject = MOCK_SUBJECTS.find((s) => s.id === t.subject_id);
+                  return (
+                    <option key={t.id} value={t.id}>
+                      {subject?.icon_emoji} {subject?.name} — {t.title}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
           </div>
 
           <div className="mb-6">
@@ -380,7 +450,7 @@ export default function AdminContentPage() {
             <button
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber to-amber/80 text-navy font-bold text-sm disabled:opacity-50"
               onClick={handleGenerate}
-              disabled={!generateTopicId || generateTypes.length === 0 || generating}
+              disabled={(!useCustomTopic && !generateTopicId) || (useCustomTopic && (!customTopicName || !customSubjectId)) || generateTypes.length === 0 || generating}
             >
               {generating ? (
                 <>

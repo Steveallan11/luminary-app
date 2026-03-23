@@ -74,7 +74,69 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to save lesson: ${error.message}`);
     }
 
-    console.log('[generate-lesson] Lesson saved to Supabase:', data?.id);
+    const lessonId = data?.id;
+    console.log('[generate-lesson] Lesson saved to Supabase:', lessonId);
+
+    // Automatically create and link assets from the lesson structure
+    if (lessonId) {
+      const assetsToCreate = [];
+
+      // 1. Concept Card
+      if (structure.concept_card_json) {
+        assetsToCreate.push({
+          topic_id: brief.topic_id,
+          asset_type: 'concept_card',
+          title: structure.concept_card_json.title,
+          content_json: structure.concept_card_json,
+          age_group: brief.age_group,
+          key_stage: brief.key_stage,
+          status: 'draft',
+          linked_lesson_id: lessonId,
+        });
+      }
+
+      // 2. Game
+      if (structure.game_content) {
+        assetsToCreate.push({
+          topic_id: brief.topic_id,
+          asset_type: 'game_questions',
+          asset_subtype: structure.game_type,
+          title: structure.game_content.title,
+          content_json: structure.game_content,
+          age_group: brief.age_group,
+          key_stage: brief.key_stage,
+          status: 'draft',
+          linked_lesson_id: lessonId,
+        });
+      }
+
+      // 3. Real-world Everyday
+      if (structure.realworld_json?.everyday) {
+        assetsToCreate.push({
+          topic_id: brief.topic_id,
+          asset_type: 'realworld_card',
+          asset_subtype: 'everyday',
+          title: structure.realworld_json.everyday.title,
+          content_json: structure.realworld_json.everyday,
+          age_group: brief.age_group,
+          key_stage: brief.key_stage,
+          status: 'draft',
+          linked_lesson_id: lessonId,
+        });
+      }
+
+      if (assetsToCreate.length > 0) {
+        const { error: assetsError } = await supabase
+          .from('topic_assets')
+          .insert(assetsToCreate);
+        
+        if (assetsError) {
+          console.error('[generate-lesson] Failed to create linked assets:', assetsError);
+        } else {
+          console.log(`[generate-lesson] Created ${assetsToCreate.length} linked assets`);
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -181,6 +181,8 @@ export default function AdminLessonsPage() {
 
       // For custom topics, we need to create a topic first
       let topicId = selectedTopicId;
+      const keyStage = keyStageMap[ageGroup] || 'KS2';
+
       if (useCustomTopic) {
         // Create a temporary topic in Supabase
         const { data: newTopic, error: topicError } = await supabase
@@ -189,6 +191,8 @@ export default function AdminLessonsPage() {
             title: customTopicName,
             subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
             description: `Custom topic: ${customTopicName}`,
+            key_stage: keyStage,
+            slug: customTopicName.toLowerCase().replace(/\s+/g, '-'),
           })
           .select()
           .single();

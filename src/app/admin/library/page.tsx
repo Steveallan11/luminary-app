@@ -49,6 +49,19 @@ export default function AdminLibraryPage() {
   const [selectedType, setSelectedType] = useState<'all' | 'lesson' | 'content'>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [jobs, setJobs] = useState<any[]>([]);
+
+  const fetchJobs = async () => {
+    const { data, error } = await supabase
+      .from('generation_jobs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    if (!error && data) {
+      setJobs(data);
+    }
+  };
 
   const fetchItems = async () => {
     try {
@@ -133,6 +146,23 @@ export default function AdminLibraryPage() {
 
   useEffect(() => {
     fetchItems();
+    fetchJobs();
+
+    // Subscribe to generation jobs
+    const channel = supabase
+      .channel('generation_jobs_changes')
+      .on('postgres_changes', { event: '*', table: 'generation_jobs', schema: 'public' }, (payload) => {
+        console.log('Job change received!', payload);
+        fetchJobs();
+        if (payload.new && (payload.new as any).status === 'completed') {
+          fetchItems();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleRefresh = () => {
@@ -211,6 +241,35 @@ export default function AdminLibraryPage() {
             Refresh
           </button>
         </div>
+
+        {/* Background Jobs */}
+        {jobs.some(j => j.status === 'processing' || j.status === 'queued') && (
+          <div className="mb-8 space-y-3">
+            <h2 className="text-sm font-bold text-amber flex items-center gap-2">
+              <Loader2 size={16} className="animate-spin" />
+              Active Generation Jobs
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {jobs.filter(j => j.status === 'processing' || j.status === 'queued').map(job => (
+                <div key={job.id} className="p-4 rounded-xl bg-amber/10 border border-amber/20 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-white">{job.title}</p>
+                    <p className="text-xs text-slate-light/60 capitalize">{job.type} • {job.status}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="w-32 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-amber transition-all duration-500" 
+                        style={{ width: `${job.progress}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-amber mt-1 font-bold">{job.progress}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="mb-6 space-y-4">
