@@ -298,6 +298,21 @@ export default function AdminContentPage() {
 
           <div className="mb-6">
             <label className="block text-sm font-bold text-white mb-2">Select Topic</label>
+
+          <div className="mb-6">
+            <label className="block text-sm font-bold text-white mb-2">Key Stage / Age Group</label>
+            <select
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
+              value={ageGroup}
+              onChange={(e) => setAgeGroup(e.target.value)}
+            >
+              {AGE_GROUPS.map((group) => (
+                <option key={group.value} value={group.value}>
+                  {group.label}
+                </option>
+              ))}
+            </select>
+          </div>
             <select
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
               value={generateTopicId}
