@@ -47,11 +47,20 @@ CREATE TABLE IF NOT EXISTS topics (
 
 CREATE TABLE IF NOT EXISTS topic_lesson_structures (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  topic_id uuid NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-  age_group text NOT NULL CHECK (age_group IN ('5-7', '8-11', '12-14', '15-16')),
+  topic_id uuid NOT NULL REFERENCES topics(id) ON   age_group text NOT NULL CHECK (age_group IN (
+    \'5-7\',
+    \'8-11\',
+    \'12-14\',
+    \'15-16\'
+  )),
+  key_stage text NOT NULL DEFAULT \'KS2\',
   version integer NOT NULL DEFAULT 1,
-  status text NOT NULL DEFAULT 'generating' CHECK (status IN ('generating', 'live', 'archived')),
-  generation_model text DEFAULT 'claude-sonnet-4-6',
+  status text NOT NULL DEFAULT \'generating\' CHECK (status IN (
+    \'generating\',
+    \'live\',
+    \'archived\'
+  )),
+  generation_model text DEFAULT \'claude-sonnet-4-6\',
   spark_json jsonb,
   explore_json jsonb,
   anchor_json jsonb,
@@ -65,10 +74,10 @@ CREATE TABLE IF NOT EXISTS topic_lesson_structures (
   avg_mastery_score double precision,
   auto_improvement_notes text,
   auto_approve_at timestamptz,
+  linked_lesson_id uuid REFERENCES topic_lesson_structures(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  UNIQUE (topic_id, age_group, version)
-);
+  UNIQUE (topic_id, age_group, version);
 
 CREATE TABLE IF NOT EXISTS lesson_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,10 +139,14 @@ ALTER TABLE lesson_sessions
 -- 3. NEW SCALING TABLES
 CREATE TABLE IF NOT EXISTS topic_lesson_images (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  topic_id uuid NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-  phase text NOT NULL DEFAULT 'explore',
-  source_type text NOT NULL DEFAULT 'wikimedia'
-    CHECK (source_type IN ('wikimedia', 'dalle', 'google_arts', 'admin_upload')),
+  topic_id uuid NOT NULL REFERENCES topics(id) ON DELETE CASCADE  phase text NOT NULL DEFAULT \'explore\',
+  source_type text NOT NULL DEFAULT \'wikimedia\'
+    CHECK (source_type IN (
+      \'wikimedia\',
+      \'dalle\',
+      \'google_arts\',
+      \'admin_upload\'
+    )),
   public_url text NOT NULL,
   storage_path text,
   accuracy_score integer DEFAULT 0
@@ -143,11 +156,10 @@ CREATE TABLE IF NOT EXISTS topic_lesson_images (
   search_query text,
   is_approved boolean DEFAULT false,
   is_blacklisted boolean DEFAULT false,
+  key_stage text NOT NULL DEFAULT \'KS2\',
+  linked_lesson_id uuid REFERENCES topic_lesson_structures(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS topic_objectives (
+  updated_at timestamptz DEFAULT now()E TABLE IF NOT EXISTS topic_objectives (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   topic_id uuid NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
   objective_code text,

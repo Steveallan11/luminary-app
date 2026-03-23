@@ -229,11 +229,13 @@ export interface TopicAsset {
   file_url: string | null;
   thumbnail_url: string | null;
   age_group: AgeGroup;
+  key_stage: string;
   status: AssetStatus;
   generation_prompt: string | null;
   generated_at: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
+  linked_lesson_id: string | null; // New field for linking content to lessons
   created_at: string;
   updated_at: string;
 }

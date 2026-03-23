@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
   BookOpen,
   FileText,
@@ -11,8 +12,8 @@ import {
   Link2,
   Trash2,
   Eye,
-  Filter,
   Search,
+  RefreshCw,
 } from 'lucide-react';
 
 const KEY_STAGES = [
@@ -30,66 +31,126 @@ interface LibraryItem {
   topic: string;
   key_stage: string;
   age_group: string;
-  status: 'pending_review' | 'live' | 'archived' | 'failed';
+  status: string;
   created_at: string;
   quality_score?: number;
-  linked_items?: string[];
+  linked_lesson_id?: string | null;
 }
 
 export default function AdminLibraryPage() {
+  const supabase = createClientComponentClient();
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedKeyStage, setSelectedKeyStage] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<'all' | 'lesson' | 'content'>('all');
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'pending_review' | 'live' | 'archived' | 'failed'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch items from Supabase
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch lessons
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('topic_lesson_structures')
+        .select(`
+          id,
+          status,
+          age_group,
+          key_stage,
+          quality_score,
+          created_at,
+          topics (
+            title,
+            subjects (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (lessonsError) throw lessonsError;
+
+      // Fetch content assets
+      const { data: assets, error: assetsError } = await supabase
+        .from('topic_assets')
+        .select(`
+          id,
+          title,
+          asset_type,
+          status,
+          age_group,
+          key_stage,
+          linked_lesson_id,
+          created_at,
+          topics (
+            title,
+            subjects (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (assetsError) throw assetsError;
+
+      const formattedLessons: LibraryItem[] = (lessons || []).map((l: any) => ({
+        id: l.id,
+        type: 'lesson',
+        title: l.topics?.title || 'Untitled Lesson',
+        subject: l.topics?.subjects?.name || 'Unknown',
+        topic: l.topics?.title || 'Unknown',
+        key_stage: l.key_stage || 'KS2',
+        age_group: l.age_group,
+        status: l.status,
+        created_at: l.created_at,
+        quality_score: l.quality_score,
+      }));
+
+      const formattedAssets: LibraryItem[] = (assets || []).map((a: any) => ({
+        id: a.id,
+        type: 'content',
+        title: a.title || `${a.asset_type.replace('_', ' ')}`,
+        subject: a.topics?.subjects?.name || 'Unknown',
+        topic: a.topics?.title || 'Unknown',
+        key_stage: a.key_stage || 'KS2',
+        age_group: a.age_group,
+        status: a.status,
+        created_at: a.created_at,
+        linked_lesson_id: a.linked_lesson_id,
+      }));
+
+      setItems([...formattedLessons, ...formattedAssets].sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ));
+    } catch (err) {
+      console.error('Failed to fetch library items:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchItems = async () => {
-      try {
-        setLoading(true);
-        // In production, this would fetch from Supabase
-        // For now, we'll use mock data
-        const mockItems: LibraryItem[] = [
-          {
-            id: '1',
-            type: 'lesson',
-            title: 'Fractions Basics',
-            subject: 'Maths',
-            topic: 'Fractions',
-            key_stage: 'KS2',
-            age_group: '8-11',
-            status: 'live',
-            created_at: new Date().toISOString(),
-            quality_score: 85,
-            linked_items: ['content-1', 'content-2'],
-          },
-          {
-            id: '2',
-            type: 'content',
-            title: 'Fraction Bars Diagram',
-            subject: 'Maths',
-            topic: 'Fractions',
-            key_stage: 'KS2',
-            age_group: '8-11',
-            status: 'live',
-            created_at: new Date().toISOString(),
-            linked_items: ['1'],
-          },
-        ];
-        setItems(mockItems);
-      } catch (err) {
-        console.error('Failed to fetch library items:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchItems();
   }, []);
 
-  // Filter items
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchItems();
+  };
+
+  const handleDelete = async (id: string, type: 'lesson' | 'content') => {
+    if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
+    
+    try {
+      const table = type === 'lesson' ? 'topic_lesson_structures' : 'topic_assets';
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+      setItems(items.filter(item => item.id !== id));
+    } catch (err) {
+      alert('Failed to delete item');
+      console.error(err);
+    }
+  };
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesSearch =
@@ -108,8 +169,11 @@ export default function AdminLibraryPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'live':
+      case 'published':
         return <CheckCircle size={16} className="text-emerald" />;
       case 'pending_review':
+      case 'generating':
+      case 'draft':
         return <Clock size={16} className="text-amber" />;
       case 'failed':
         return <AlertCircle size={16} className="text-red-500" />;
@@ -130,14 +194,23 @@ export default function AdminLibraryPage() {
     <div className="min-h-screen bg-gradient-to-br from-navy via-navy/95 to-navy/90 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-black text-white mb-2">Content & Lesson Library</h1>
-          <p className="text-slate-light/60">Manage all your created content and lessons in one place</p>
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-4xl font-black text-white mb-2">Content & Lesson Library</h1>
+            <p className="text-slate-light/60">Manage all your created content and lessons in one place</p>
+          </div>
+          <button 
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
 
         {/* Filters */}
         <div className="mb-6 space-y-4">
-          {/* Search */}
           <div className="relative">
             <Search size={18} className="absolute left-3 top-3.5 text-slate-light/40" />
             <input
@@ -149,9 +222,7 @@ export default function AdminLibraryPage() {
             />
           </div>
 
-          {/* Filter Controls */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            {/* Key Stage Filter */}
             <div>
               <label className="block text-xs font-bold text-slate-light/60 mb-2">Key Stage</label>
               <select
@@ -161,19 +232,16 @@ export default function AdminLibraryPage() {
               >
                 <option value="">All Key Stages</option>
                 {KEY_STAGES.map((ks) => (
-                  <option key={ks.value} value={ks.value}>
-                    {ks.label}
-                  </option>
+                  <option key={ks.value} value={ks.value}>{ks.label}</option>
                 ))}
               </select>
             </div>
 
-            {/* Type Filter */}
             <div>
               <label className="block text-xs font-bold text-slate-light/60 mb-2">Type</label>
               <select
                 value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value as 'all' | 'lesson' | 'content')}
+                onChange={(e) => setSelectedType(e.target.value as any)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber"
               >
                 <option value="all">All Types</option>
@@ -182,23 +250,21 @@ export default function AdminLibraryPage() {
               </select>
             </div>
 
-            {/* Status Filter */}
             <div>
               <label className="block text-xs font-bold text-slate-light/60 mb-2">Status</label>
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value as any)}
+                onChange={(e) => setSelectedStatus(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber"
               >
                 <option value="all">All Statuses</option>
-                <option value="live">Live</option>
+                <option value="live">Live / Published</option>
                 <option value="pending_review">Pending Review</option>
-                <option value="archived">Archived</option>
+                <option value="draft">Draft</option>
                 <option value="failed">Failed</option>
               </select>
             </div>
 
-            {/* Results Count */}
             <div className="flex items-end">
               <div className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10">
                 <p className="text-sm text-slate-light/60">{filteredItems.length} results</p>
@@ -220,15 +286,12 @@ export default function AdminLibraryPage() {
           <div className="space-y-3">
             {filteredItems.map((item) => (
               <div
-                key={item.id}
+                key={`${item.type}-${item.id}`}
                 className="rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4 flex-1">
-                    {/* Type Icon */}
                     <div className="mt-1">{getTypeIcon(item.type)}</div>
-
-                    {/* Content */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="text-sm font-bold text-white">{item.title}</h3>
@@ -248,24 +311,23 @@ export default function AdminLibraryPage() {
                           </>
                         )}
                       </div>
-                      {item.linked_items && item.linked_items.length > 0 && (
+                      {item.linked_lesson_id && (
                         <div className="mt-2 flex items-center gap-1 text-xs text-sky">
                           <Link2 size={12} />
-                          <span>Linked to {item.linked_items.length} item(s)</span>
+                          <span>Linked to Lesson</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-2 ml-4">
                     <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-light/60 hover:text-white transition-colors">
                       <Eye size={16} />
                     </button>
-                    <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-light/60 hover:text-white transition-colors">
-                      <Link2 size={16} />
-                    </button>
-                    <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-light/60 hover:text-red-500 transition-colors">
+                    <button 
+                      onClick={() => handleDelete(item.id, item.type)}
+                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-light/60 hover:text-red-500 transition-colors"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>
