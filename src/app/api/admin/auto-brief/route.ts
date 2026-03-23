@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAnthropicClient, LUMI_MODEL } from '@/lib/anthropic';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,73 +18,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'topic_title is required' }, { status: 400 });
     }
 
-    // For now, return mock data. In production, call Claude to generate.
-    const mockBriefs: Record<string, any> = {
-      'Roman Empire': {
-        keyConcepts: ['Roman Republic', 'Julius Caesar', 'Augustus', 'Pax Romana', 'Gladiators', 'Aqueducts'],
-        misconceptions: ['Romans invented democracy', 'All Romans were wealthy', 'The Roman Empire lasted forever', 'Romans only fought wars'],
-        realWorldExamples: ['Modern government structures inspired by Rome', 'Roman roads still used today', 'Latin in modern languages', 'Roman architecture in cities'],
-        curriculumObjectives: [
-          'Understand the rise and fall of the Roman Empire',
-          'Identify key figures and their contributions',
-          'Describe daily life in ancient Rome',
-          'Explain the legacy of Rome in modern society',
-        ],
-      },
-      '5 Times Table': {
-        keyConcepts: ['Multiplication', 'Groups of 5', 'Skip counting', 'Repeated addition', 'Patterns'],
-        misconceptions: ['Multiplication is just repeated addition (it\'s more)', 'The 5 times table only goes to 50', 'You need to memorize it perfectly'],
-        realWorldExamples: ['Counting fingers and toes', 'Money (5p coins)', 'Clocks (5-minute intervals)', 'Sports scores'],
-        curriculumObjectives: [
-          'Recall the 5 times table fluently',
-          'Use the 5 times table to solve problems',
-          'Understand the relationship between multiplication and division',
-          'Apply times tables in real-world contexts',
-        ],
-      },
-      'Angles': {
-        keyConcepts: ['Acute angles', 'Obtuse angles', 'Right angles', 'Straight angles', 'Angle measurement', 'Degrees'],
-        misconceptions: ['Angles are only in triangles', 'Bigger shapes have bigger angles', 'You can\'t measure angles without a protractor'],
-        realWorldExamples: ['Clock hands', 'Building corners', 'Road intersections', 'Ladder leaning against a wall'],
-        curriculumObjectives: [
-          'Identify and classify different types of angles',
-          'Measure angles using a protractor',
-          'Understand angle relationships',
-          'Apply angle knowledge to solve problems',
-        ],
-      },
-    };
+    const client = getAnthropicClient();
+    const prompt = `You are a curriculum expert for Luminary, a UK homeschooling platform.
+Generate a lesson brief for the following topic:
+- Topic: ${topic_title}
+- Subject: ${subject_name || 'General'}
+- Age Group: ${age_group || '8-11'}
 
-    // Try to find a matching brief, otherwise generate a generic one
-    let brief = mockBriefs[topic_title];
+Return ONLY valid JSON with this structure:
+{
+  "keyConcepts": ["string", "string", ...],
+  "misconceptions": ["string", "string", ...],
+  "realWorldExamples": ["string", "string", ...],
+  "curriculumObjectives": ["string", "string", ...]
+}
 
-    if (!brief) {
-      // Generic fallback based on topic
-      brief = {
-        keyConcepts: [
-          `Understanding ${topic_title}`,
-          `Key principles of ${topic_title}`,
-          `Applications of ${topic_title}`,
-          `History of ${topic_title}`,
-        ],
-        misconceptions: [
-          `${topic_title} is too difficult`,
-          `${topic_title} is not useful in real life`,
-          `There's only one way to approach ${topic_title}`,
-        ],
-        realWorldExamples: [
-          `${topic_title} in everyday life`,
-          `Famous examples of ${topic_title}`,
-          `How ${topic_title} affects us`,
-        ],
-        curriculumObjectives: [
-          `Understand the fundamentals of ${topic_title}`,
-          `Apply ${topic_title} to solve problems`,
-          `Recognize ${topic_title} in real-world contexts`,
-        ],
-      };
-    }
+Ensure the content is age-appropriate and follows the UK National Curriculum standards.
+Return ONLY the JSON object, no markdown formatting, no code fences.`;
 
+    const response = await client.messages.create({
+      model: LUMI_MODEL,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    });
+
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    const cleaned = text
+      .replace(/^```(?:json)?\s*/m, '')
+      .replace(/\s*```\s*$/m, '')
+      .trim();
+
+    const brief = JSON.parse(cleaned);
     return NextResponse.json({ brief });
   } catch (error) {
     console.error('Auto-brief generation error:', error);

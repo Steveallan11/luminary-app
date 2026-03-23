@@ -21,30 +21,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // In production: update Supabase
-    // const updatePayload: Record<string, unknown> = {
-    //   status: 'live',
-    //   approved_at: new Date().toISOString(),
-    //   approved_by: approved_by ?? 'admin',
-    // };
-    //
-    // // Apply any inline edits
-    // if (edits) {
-    //   for (const [phase, content] of Object.entries(edits)) {
-    //     if (['spark_json', 'explore_json', 'anchor_json', 'practise_json',
-    //          'create_json', 'check_json', 'celebrate_json',
-    //          'game_content', 'concept_card_json', 'realworld_json'].includes(phase)) {
-    //       updatePayload[phase] = content;
-    //     }
-    //   }
-    // }
-    //
-    // const { data, error } = await supabase
-    //   .from('topic_lesson_structures')
-    //   .update(updatePayload)
-    //   .eq('id', structure_id)
-    //   .select()
-    //   .single();
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const updatePayload: Record<string, unknown> = {
+      status: 'live',
+      updated_at: new Date().toISOString(),
+    };
+
+    // Apply any inline edits
+    if (edits) {
+      for (const [phase, content] of Object.entries(edits)) {
+        if (['spark_json', 'explore_json', 'anchor_json', 'practise_json',
+             'create_json', 'check_json', 'celebrate_json',
+             'game_content', 'concept_card_json', 'realworld_json'].includes(phase)) {
+          updatePayload[phase] = content;
+        }
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('topic_lesson_structures')
+      .update(updatePayload)
+      .eq('id', structure_id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to approve lesson: ${error.message}`);
+    }
 
     return NextResponse.json({
       success: true,

@@ -61,8 +61,8 @@ export async function POST(req: NextRequest) {
     }
 
     // In production, call Claude API for each asset type
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic({ apiKey });
+    const { getAnthropicClient, LUMI_MODEL } = await import('@/lib/anthropic');
+    const client = getAnthropicClient();
 
     const assets: TopicAsset[] = [];
 
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       const prompt = buildGenerationPrompt(type, topic.title, topic.description, subject.name, subject.colour_hex, age_group);
 
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: LUMI_MODEL,
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       });
@@ -80,10 +80,11 @@ export async function POST(req: NextRequest) {
       // Parse JSON from response
       let contentJson = {};
       try {
-        const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) || text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          contentJson = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-        }
+        const cleaned = text
+          .replace(/^```(?:json)?\s*/m, '')
+          .replace(/\s*```\s*$/m, '')
+          .trim();
+        contentJson = JSON.parse(cleaned);
       } catch {
         contentJson = { raw_text: text };
       }

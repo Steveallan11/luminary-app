@@ -61,6 +61,12 @@ export default function AdminLessonsPage() {
   const [ageGroup, setAgeGroup] = useState('8-11');
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  
+  // Review state
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+  const [generatingContent, setGeneratingContent] = useState(false);
 
   // Brief editing state
   const [briefData, setBriefData] = useState<LessonBrief>({
@@ -155,6 +161,68 @@ export default function AdminLessonsPage() {
     setBriefEdited(true);
   };
 
+  const fetchLessons = async () => {
+    const { data, error } = await supabase
+      .from('topic_lesson_structures')
+      .select('*, topics(title, subjects(name))')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setLessons(data);
+    }
+  };
+
+  const handleApprove = async (lessonId: string) => {
+    setIsApproving(true);
+    try {
+      const res = await fetch('/api/admin/approve-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structure_id: lessonId }),
+      });
+      
+      if (res.ok) {
+        alert('Lesson approved! You can now generate supporting content.');
+        fetchLessons();
+        if (selectedLesson?.id === lessonId) {
+          setSelectedLesson({ ...selectedLesson, status: 'live' });
+        }
+      }
+    } catch (err) {
+      alert('Failed to approve lesson');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleGenerateContent = async (lesson: any) => {
+    setGeneratingContent(true);
+    try {
+      const res = await fetch('/api/admin/queue-generation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'content',
+          topic_id: lesson.topic_id,
+          title: lesson.topics?.title,
+          subject_name: lesson.topics?.subjects?.name,
+          key_stage: lesson.key_stage,
+          age_group: lesson.age_group,
+          asset_types: ['concept_card', 'game_questions', 'realworld_card', 'worksheet'],
+          linked_lesson_id: lesson.id
+        }),
+      });
+      
+      if (res.ok) {
+        alert('Content generation queued! Check the Library for progress.');
+      }
+    } catch (err) {
+      alert('Failed to queue content generation');
+    } finally {
+      setGeneratingContent(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (useCustomTopic && !customTopicName) {
       setGenerationError('Please enter a custom topic name');
@@ -241,7 +309,8 @@ export default function AdminLessonsPage() {
       const result = await res.json();
       setGenerationError(null);
       alert(`Lesson generation queued! Job ID: ${result.job_id}\n\nYou can now switch screens. Check the Library page to see when it's ready.`);
-      setActiveView('queue');
+      setActiveView('review');
+      fetchLessons();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Generation failed';
       console.error('Generation error:', message);
@@ -273,14 +342,17 @@ export default function AdminLessonsPage() {
             Generate
           </button>
           <button
-            onClick={() => setActiveView('queue')}
+            onClick={() => {
+              setActiveView('review');
+              fetchLessons();
+            }}
             className={`px-4 py-3 font-semibold transition-colors ${
-              activeView === 'queue'
+              activeView === 'review'
                 ? 'text-amber border-b-2 border-amber'
                 : 'text-slate-light/60 hover:text-white'
             }`}
           >
-            Queue (0)
+            Review & Approve
           </button>
         </div>
 
@@ -458,10 +530,103 @@ export default function AdminLessonsPage() {
           </div>
         )}
 
-        {/* Queue Tab */}
-        {activeView === 'queue' && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-            <p className="text-slate-light/60">No lessons in queue. Check the Library page to see completed lessons!</p>
+        {/* Review Tab */}
+        {activeView === 'review' && (
+          <div className="grid grid-cols-12 gap-6">
+            {/* Lesson List */}
+            <div className="col-span-4 space-y-3">
+              <h3 className="text-sm font-bold text-slate-light/60 uppercase tracking-wider mb-4">Recent Lessons</h3>
+              {lessons.length === 0 ? (
+                <div className="p-8 text-center rounded-xl border border-white/10 bg-white/5">
+                  <p className="text-sm text-slate-light/40">No lessons found</p>
+                </div>
+              ) : (
+                lessons.map((lesson) => (
+                  <button
+                    key={lesson.id}
+                    onClick={() => setSelectedLesson(lesson)}
+                    className={`w-full text-left p-4 rounded-xl border transition-all ${
+                      selectedLesson?.id === lesson.id
+                        ? 'border-amber bg-amber/10'
+                        : 'border-white/10 bg-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                        lesson.status === 'live' ? 'bg-emerald/20 text-emerald' : 'bg-amber/20 text-amber'
+                      }`}>
+                        {lesson.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-[10px] text-slate-light/40">
+                        {new Date(lesson.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h4 className="text-white font-bold text-sm mb-1">{lesson.topics?.title}</h4>
+                    <p className="text-xs text-slate-light/60">{lesson.topics?.subjects?.name} • {lesson.key_stage}</p>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {/* Lesson Preview & Actions */}
+            <div className="col-span-8">
+              {selectedLesson ? (
+                <div className="space-y-6">
+                  <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <h2 className="text-2xl font-bold text-white mb-1">{selectedLesson.topics?.title}</h2>
+                        <p className="text-slate-light/60">
+                          {selectedLesson.topics?.subjects?.name} • {selectedLesson.key_stage} • Age {selectedLesson.age_group}
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        {selectedLesson.status !== 'live' && (
+                          <button
+                            onClick={() => handleApprove(selectedLesson.id)}
+                            disabled={isApproving}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald text-navy font-bold text-sm hover:bg-emerald/90 disabled:opacity-50"
+                          >
+                            {isApproving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                            Approve Layout
+                          </button>
+                        )}
+                        {selectedLesson.status === 'live' && (
+                          <button
+                            onClick={() => handleGenerateContent(selectedLesson)}
+                            disabled={generatingContent}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber text-navy font-bold text-sm hover:bg-amber/90 disabled:opacity-50"
+                          >
+                            {generatingContent ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                            Generate Supporting Content
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Preview of Phases */}
+                    <div className="space-y-4">
+                      {['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'].map((phase) => (
+                        <div key={phase} className="p-4 rounded-xl bg-white/5 border border-white/10">
+                          <h5 className="text-xs font-bold text-amber uppercase tracking-widest mb-2">{phase}</h5>
+                          <p className="text-sm text-white line-clamp-2">
+                            {selectedLesson[`${phase}_json`]?.phase_goal || 'No goal defined'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-12 rounded-2xl border border-dashed border-white/10 bg-white/5 text-center">
+                  <BookOpen size={48} className="text-slate-light/20 mb-4" />
+                  <h3 className="text-white font-bold mb-2">Select a lesson to review</h3>
+                  <p className="text-sm text-slate-light/40 max-w-xs">
+                    Choose a generated lesson from the list to review its layout and approve it for content generation.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
