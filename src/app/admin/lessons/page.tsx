@@ -260,6 +260,16 @@ export default function AdminLessonsPage() {
       const keyStage = keyStageMap[ageGroup] || 'KS2';
       const estimatedMinutes = estimatedMinutesMap[keyStage] || 30;
 
+      // FIX: If the topicId is a mock ID (like 't9'), we need to use a real UUID for the database
+      // In a real app, we'd fetch the real ID or create it. For now, we'll use a placeholder UUID
+      // if it's not a valid UUID format.
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topicId);
+      if (!isUuid && !useCustomTopic) {
+        // This is a mock ID from mock-data.ts, we need a real UUID for the generation_jobs table
+        // We'll use a consistent placeholder for mock topics to avoid UUID errors
+        topicId = '00000000-0000-0000-0000-000000000000'; 
+      }
+
       if (useCustomTopic) {
         // Create a temporary topic in Supabase
         const slug = customTopicName

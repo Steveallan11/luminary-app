@@ -85,13 +85,35 @@ export async function POST(req: NextRequest) {
     if (lessonId) {
       const assetsToCreate = [];
 
+      // Helper to generate image in background if API key exists
+      const generateImage = async (prompt: string) => {
+        if (!process.env.OPENAI_API_KEY) return null;
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/generate-images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            return data.url;
+          }
+        } catch (e) {
+          console.error('Background image generation failed:', e);
+        }
+        return null;
+      };
+
       // 1. Concept Card
       if (structure.concept_card_json) {
+        const conceptCard = structure.concept_card_json as any;
+        const imageUrl = await generateImage(conceptCard.image_prompt || conceptCard.title);
         assetsToCreate.push({
           topic_id: brief.topic_id,
           asset_type: 'concept_card',
           title: structure.concept_card_json.title,
           content_json: structure.concept_card_json,
+          file_url: imageUrl,
           age_group: brief.age_group,
           key_stage: brief.key_stage,
           status: 'draft',
@@ -116,12 +138,15 @@ export async function POST(req: NextRequest) {
 
       // 3. Real-world Everyday
       if (structure.realworld_json?.everyday) {
+        const everyday = structure.realworld_json.everyday as any;
+        const imageUrl = await generateImage(everyday.image_prompt || everyday.title);
         assetsToCreate.push({
           topic_id: brief.topic_id,
           asset_type: 'realworld_card',
           asset_subtype: 'everyday',
           title: structure.realworld_json.everyday.title,
           content_json: structure.realworld_json.everyday,
+          file_url: imageUrl,
           age_group: brief.age_group,
           key_stage: brief.key_stage,
           status: 'draft',

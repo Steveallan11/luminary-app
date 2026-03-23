@@ -14,6 +14,7 @@ import {
   Eye,
   Search,
   RefreshCw,
+  X,
 } from 'lucide-react';
 
 const KEY_STAGES = [
@@ -50,6 +51,8 @@ export default function AdminLibraryPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [linkingAsset, setLinkingAsset] = useState<LibraryItem | null>(null);
+  const [isLinking, setIsLinking] = useState(false);
 
   const fetchJobs = async () => {
     const { data, error } = await supabase
@@ -181,6 +184,27 @@ export default function AdminLibraryPage() {
     } catch (err) {
       alert('Failed to delete item');
       console.error(err);
+    }
+  };
+
+  const handleLinkToLesson = async (lessonId: string) => {
+    if (!linkingAsset) return;
+    setIsLinking(true);
+    try {
+      const { error } = await supabase
+        .from('topic_assets')
+        .update({ linked_lesson_id: lessonId })
+        .eq('id', linkingAsset.id);
+      
+      if (error) throw error;
+      alert('Asset linked successfully!');
+      setLinkingAsset(null);
+      fetchItems();
+    } catch (err) {
+      alert('Failed to link asset');
+      console.error(err);
+    } finally {
+      setIsLinking(false);
     }
   };
 
@@ -386,12 +410,23 @@ export default function AdminLibraryPage() {
                     <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-light/60 hover:text-white transition-colors">
                       <Eye size={16} />
                     </button>
-                    <button 
-                      onClick={() => handleDelete(item.id, item.type)}
-                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-light/60 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {item.type === 'content' && (
+                        <button 
+                          onClick={() => setLinkingAsset(item)}
+                          className="p-2 rounded-lg bg-sky/10 text-sky hover:bg-sky/20 transition-colors"
+                          title="Link to Lesson"
+                        >
+                          <Link2 size={16} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDelete(item.id, item.type)}
+                        className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -399,6 +434,42 @@ export default function AdminLibraryPage() {
           </div>
         )}
       </div>
+
+      {/* Linking Modal */}
+      {linkingAsset && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-navy/80 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-navy-dark border border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Link Asset to Lesson</h3>
+                <p className="text-sm text-slate-light/60">Select a lesson to connect "{linkingAsset.title}" to.</p>
+              </div>
+              <button onClick={() => setLinkingAsset(null)} className="p-2 text-slate-light/40 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 max-h-[400px] overflow-y-auto space-y-3 custom-scrollbar">
+              {items.filter(i => i.type === 'lesson').map(lesson => (
+                <button
+                  key={lesson.id}
+                  onClick={() => handleLinkToLesson(lesson.id)}
+                  disabled={isLinking}
+                  className="w-full text-left p-4 rounded-xl border border-white/10 bg-white/5 hover:border-amber/50 hover:bg-amber/5 transition-all flex items-center justify-between group"
+                >
+                  <div>
+                    <h4 className="text-white font-bold">{lesson.title}</h4>
+                    <p className="text-xs text-slate-light/40">{lesson.subject} • {lesson.key_stage}</p>
+                  </div>
+                  <Link2 size={18} className="text-slate-light/20 group-hover:text-amber transition-colors" />
+                </button>
+              ))}
+              {items.filter(i => i.type === 'lesson').length === 0 && (
+                <p className="text-center py-8 text-slate-light/40">No lessons found to link to.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
