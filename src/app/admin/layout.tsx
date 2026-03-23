@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { LayoutDashboard, Wand2, BookOpen, Image, FileText, Shield, Activity } from 'lucide-react';
+import { LayoutDashboard, Wand2, BookOpen, Image, FileText, Shield, Activity, Library } from 'lucide-react';
 import { isAdminAuthenticated, getAdminSessionEmail } from '@/lib/admin-auth';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const adminEmail = await getAdminSessionEmail();
 
   const navItems = [
+    { href: '/admin/library', label: 'Library', icon: Library },
     { href: '/admin/content', label: 'Content', icon: LayoutDashboard },
     { href: '/admin/lessons', label: 'Lessons', icon: BookOpen },
     { href: '/admin/images', label: 'Images', icon: Image },

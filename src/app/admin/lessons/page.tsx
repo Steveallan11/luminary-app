@@ -158,32 +158,35 @@ export default function AdminLessonsPage() {
         '15-16': 'KS4',
       };
 
-      const res = await fetch('/api/admin/generate-lesson', {
+      // Queue the generation job in the background
+      const res = await fetch('/api/admin/queue-generation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          type: 'lesson',
           topic_id: selectedTopicId,
           title: selectedTopic.title,
           subject_name: selectedSubject.name,
           key_stage: keyStageMap[ageGroup] || 'KS2',
           age_group: ageGroup,
-          key_concepts: briefData.keyConcepts,
-          common_misconceptions: briefData.misconceptions,
-          real_world_examples: briefData.realWorldExamples,
-          curriculum_objectives: briefData.curriculumObjectives,
+          brief: {
+            key_concepts: briefData.keyConcepts,
+            common_misconceptions: briefData.misconceptions,
+            real_world_examples: briefData.realWorldExamples,
+            curriculum_objectives: briefData.curriculumObjectives,
+          },
         }),
       });
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || error.details || `Generation failed: ${res.status}`);
+        throw new Error(error.error || error.details || `Queuing failed: ${res.status}`);
       }
 
-      const lesson = await res.json();
-      setGeneratedLessons((prev) => [lesson, ...prev]);
-      setReviewLesson(lesson);
-      setActiveView('review');
+      const result = await res.json();
       setGenerationError(null);
+      alert(`Lesson generation queued! Job ID: ${result.job_id}\n\nYou can now switch screens. Check the Library page to see when it's ready.`);
+      setActiveView('queue');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Generation failed';
       console.error('Generation error:', message);
