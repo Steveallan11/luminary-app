@@ -82,29 +82,43 @@ export default function AdminContentPage() {
     setGenerating(true);
 
     try {
-      const res = await fetch('/api/admin/generate-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const topic = ALL_TOPICS.find((t) => t.id === generateTopicId);
+      if (!topic) {
+        throw new Error("Topic not found");
+      }
+
+      const keyStageMap: Record<string, string> = {
+        "5-7": "KS1",
+        "8-11": "KS2",
+        "12-14": "KS3",
+        "15-16": "KS4",
+      };
+
+      // Queue the generation job in the background
+      const res = await fetch("/api/admin/queue-generation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          type: "content",
           topic_id: generateTopicId,
           asset_types: generateTypes,
           age_group: ageGroup,
+          key_stage: keyStageMap[ageGroup] || "KS2",
+          title: topic.title,
+          subject_name: MOCK_SUBJECTS.find((s) => s.id === topic.subject_id)?.name || "Unknown",
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const assets = data.assets || [];
-        setGeneratedContent(assets);
-        setActiveTab('review');
-
-        if (assets.length > 0) {
-          setReviewAsset(assets[0]);
-          setEditJson(JSON.stringify(assets[0].content_json, null, 2));
-        }
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || error.details || `Queuing failed: ${res.status}`);
       }
-    } catch (err) {
-      console.error('Generation failed:', err);
+
+      const result = await res.json();
+      alert(`Content generation queued! Job ID: ${result.job_id}\n\nYou can now switch screens. Check the Library page to see when it's ready.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Generation failed";
+      console.error("Generation error:", message);
     } finally {
       setGenerating(false);
     }
