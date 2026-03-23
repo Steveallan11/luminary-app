@@ -49,9 +49,9 @@ Route (app)                              Size     First Load JS
 ┌ ○ /                                    4.32 kB         145 kB
 ├ ○ /_not-found                          142 B          87.4 kB
 ├ ○ /achievements                        6.49 kB         147 kB
-├ ƒ /admin/content                       7.67 kB         210 kB
+├ ƒ /admin/content                       7.66 kB         210 kB
 ├ ƒ /admin/images                        3.79 kB        94.8 kB
-├ ƒ /admin/lessons                       5.27 kB         147 kB
+├ ƒ /admin/lessons                       5.26 kB         147 kB
 ├ ƒ /admin/library                       4.54 kB         143 kB
 ├ ƒ /admin/performance                   3.4 kB         90.7 kB
 ├ ƒ /admin/reports                       2.81 kB        93.8 kB

@@ -269,7 +269,6 @@ export default function AdminLessonsPage() {
             key_stage: keyStage,
             slug: slug || `custom-${Date.now()}`,
             order_index: 0,
-            estimated_minutes: 20,
           })
           .select()
           .single();
