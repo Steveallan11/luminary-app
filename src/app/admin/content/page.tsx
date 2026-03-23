@@ -30,68 +30,36 @@ const ALL_TOPICS: Topic[] = Object.values(MOCK_TOPICS).flat();
 const ASSET_TYPES: { type: AssetType; label: string; icon: React.ReactNode; colour: string }[] = [
   { type: 'concept_card', label: 'Concept Card', icon: <Lightbulb size={14} />, colour: '#F59E0B' },
   { type: 'video', label: 'Video', icon: <Video size={14} />, colour: '#3B82F6' },
+  { type: 'realworld_card', label: 'Real-World Card', icon: <Gamepad2 size={14} />, colour: '#10B981' },
   { type: 'diagram', label: 'Diagram', icon: <Image size={14} />, colour: '#8B5CF6' },
-  { type: 'realworld_card', label: 'Real-World', icon: <BookOpen size={14} />, colour: '#10B981' },
-  { type: 'game_questions', label: 'Games', icon: <Gamepad2 size={14} />, colour: '#EF4444' },
+  { type: 'game_questions', label: 'Game', icon: <Gamepad2 size={14} />, colour: '#EC4899' },
   { type: 'worksheet', label: 'Worksheet', icon: <FileText size={14} />, colour: '#6366F1' },
-  { type: 'check_questions', label: 'Check Qs', icon: <Check size={14} />, colour: '#14B8A6' },
-];
-
-const AGE_GROUPS = [
-  { value: '5-7', label: 'Ages 5-7 (KS1)' },
-  { value: '8-11', label: 'Ages 8-11 (KS2)' },
-  { value: '12-14', label: 'Ages 12-14 (KS3)' },
-  { value: '15-16', label: 'Ages 15-16 (KS4)' },
 ];
 
 export default function AdminContentPage() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'generate' | 'review'>('dashboard');
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'library' | 'generate'>('library');
+  const [selectedAsset, setSelectedAsset] = useState<TopicAsset | null>(null);
+  const [generateTopicId, setGenerateTopicId] = useState('');
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState<AssetType[]>([]);
+  const [ageGroup, setAgeGroup] = useState('8-11');
   const [generating, setGenerating] = useState(false);
-  const [generateTopicId, setGenerateTopicId] = useState<string>('');
-  const [generateTypes, setGenerateTypes] = useState<AssetType[]>([]);
-  const [generatedContent, setGeneratedContent] = useState<TopicAsset[]>([]);
-  const [reviewAsset, setReviewAsset] = useState<TopicAsset | null>(null);
-  const [editJson, setEditJson] = useState('');
-  const [ageGroup, setAgeGroup] = useState<string>('8-11');
-  const [useCustomTopic, setUseCustomTopic] = useState(false);
   const [customTopicName, setCustomTopicName] = useState('');
   const [customSubjectId, setCustomSubjectId] = useState('');
+  const [useCustomTopic, setUseCustomTopic] = useState(false);
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const getTopicAssets = (topicId: string) => MOCK_TOPIC_ASSETS.filter((a) => a.topic_id === topicId);
-
-  const hasAssetType = (topicId: string, type: AssetType) => {
-    return MOCK_TOPIC_ASSETS.some((a) => a.topic_id === topicId && a.asset_type === type && a.status === 'published');
-  };
-
-  const totalTopics = ALL_TOPICS.length;
-  const coveredTopics = ALL_TOPICS.filter((t) => ASSET_TYPES.some((at) => hasAssetType(t.id, at.type))).length;
-  const coveragePercent = totalTopics > 0 ? Math.round((coveredTopics / totalTopics) * 100) : 0;
-
-  const reviewList = generatedContent.length > 0 ? generatedContent : MOCK_TOPIC_ASSETS;
-
-  const reviewTopic = useMemo(() => {
-    if (!reviewAsset) return null;
-    return ALL_TOPICS.find((topic) => topic.id === reviewAsset.topic_id) ?? null;
-  }, [reviewAsset]);
-
-  const reviewSubject = useMemo(() => {
-    if (!reviewTopic) return null;
-    return MOCK_SUBJECTS.find((subject) => subject.id === reviewTopic.subject_id) ?? null;
-  }, [reviewTopic]);
-
-
   const handleGenerate = async () => {
-    if ((!useCustomTopic && !generateTopicId) || (useCustomTopic && (!customTopicName || !customSubjectId)) || generateTypes.length === 0) return;
-    setGenerating(true);
+    if (!useCustomTopic && !generateTopicId) return;
+    if (useCustomTopic && (!customTopicName || !customSubjectId)) return;
+    if (selectedAssetTypes.length === 0) return;
 
+    setGenerating(true);
     try {
-      let topicId = generateTopicId;
+      let topicId = '';
       let topicTitle = '';
       let subjectName = '';
       let keyStage = '';
@@ -114,16 +82,17 @@ export default function AdminContentPage() {
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '');
 
+        const topicData: any = {
+          title: customTopicName,
+          subject_id: customSubjectId === 'other' ? '00000000-0000-0000-0000-000000000000' : customSubjectId,
+          description: `Custom topic: ${customTopicName}`,
+          slug: slug || `custom-${Date.now()}`,
+          order_index: 0,
+        };
+
         const { data: newTopic, error: topicError } = await supabase
           .from('topics')
-          .insert({
-            title: customTopicName,
-            subject_id: customSubjectId === 'other' ? '00000000-0000-0000-0000-000000000000' : customSubjectId,
-            description: `Custom topic: ${customTopicName}`,
-            key_stage: keyStage,
-            slug: slug || `custom-${Date.now()}`,
-            order_index: 0,
-          })
+          .insert(topicData)
           .select()
           .single();
 
@@ -139,513 +108,304 @@ export default function AdminContentPage() {
         if (!topic) throw new Error("Topic not found");
         topicId = topic.id;
         topicTitle = topic.title;
-        subjectName = MOCK_SUBJECTS.find((s) => s.id === topic.subject_id)?.name || "Unknown";
+        const subject = MOCK_SUBJECTS.find((s) => s.id === topic.subject_id);
+        subjectName = subject?.name || "General";
       }
 
-      // Queue the generation job in the background
-      const res = await fetch("/api/admin/queue-generation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/admin/generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: "content",
           topic_id: topicId,
-          asset_types: generateTypes,
+          asset_types: selectedAssetTypes,
           age_group: ageGroup,
-          key_stage: keyStage,
-          title: topicTitle,
-          subject_name: subjectName,
         }),
       });
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || error.details || `Queuing failed: ${res.status}`);
-      }
+      if (!res.ok) throw new Error('Generation failed');
 
-      const result = await res.json();
-      alert(`Content generation queued! Job ID: ${result.job_id}\n\nYou can now switch screens. Check the Library page to see when it's ready.`);
+      const data = await res.json();
+      alert(`Successfully generated ${data.assets.length} assets for ${topicTitle}!`);
+      setActiveTab('library');
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Generation failed";
-      console.error("Generation error:", message);
+      console.error('Generation error:', error);
+      alert('Failed to generate content. Please try again.');
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleReview = (asset: TopicAsset) => {
-    setReviewAsset(asset);
-    setEditJson(JSON.stringify(asset.content_json, null, 2));
-  };
-
-  const handleBackToGenerate = () => {
-    setReviewAsset(null);
-    setEditJson('');
-    setActiveTab('generate');
-  };
-
-  const handleBackToList = () => {
-    setReviewAsset(null);
-    setEditJson('');
-  };
-
-  const handleSaveChanges = async () => {
-    if (!reviewAsset) return;
-    try {
-      const updatedJson = JSON.parse(editJson);
-      const res = await fetch('/api/admin/save-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          asset_id: reviewAsset.id,
-          content_json: updatedJson,
-        }),
-      });
-
-      if (res.ok) {
-        // Update local state
-        setReviewAsset((prev) => prev ? { ...prev, content_json: updatedJson } : null);
-        alert('Content saved successfully!');
-      }
-    } catch (error) {
-      alert('Failed to save: ' + (error instanceof Error ? error.message : 'Invalid JSON'));
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!reviewAsset) return;
-    try {
-      const res = await fetch('/api/admin/publish-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          asset_id: reviewAsset.id,
-        }),
-      });
-
-      if (res.ok) {
-        setReviewAsset((prev) => prev ? { ...prev, status: 'published' } : null);
-        setGeneratedContent((prev) =>
-          prev.map((a) => (a.id === reviewAsset.id ? { ...a, status: 'published' } : a))
-        );
-        alert('Content published successfully!');
-      }
-    } catch (error) {
-      alert('Failed to publish: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
+  const toggleAssetType = (type: AssetType) => {
+    setSelectedAssetTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-1 mb-8 bg-white/5 rounded-xl p-1 w-fit">
-        {[
-          { id: 'dashboard' as const, label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-          { id: 'generate' as const, label: 'Generate Content', icon: <Wand2 size={16} /> },
-          { id: 'review' as const, label: 'Review & Edit', icon: <Eye size={16} /> },
-        ].map((tab) => (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Content Management</h1>
+          <p className="text-slate-light/60">Generate and manage curriculum-aligned learning assets.</p>
+        </div>
+        <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
           <button
-            key={tab.id}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === tab.id ? 'bg-white/10 text-white' : 'text-slate-light/60 hover:text-white'
+            onClick={() => setActiveTab('library')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'library' ? 'bg-amber text-navy' : 'text-slate-light/60 hover:text-white'
             }`}
-            onClick={() => setActiveTab(tab.id)}
           >
-            {tab.icon} {tab.label}
+            Library
           </button>
-        ))}
+          <button
+            onClick={() => setActiveTab('generate')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'generate' ? 'bg-amber text-navy' : 'text-slate-light/60 hover:text-white'
+            }`}
+          >
+            Generate
+          </button>
+        </div>
       </div>
 
-      {activeTab === 'dashboard' && (
-        <div>
-          <div className="grid grid-cols-4 gap-4 mb-8">
-            <div className="rounded-xl bg-white/5 border border-white/10 p-4">
-              <p className="text-xs text-slate-light/60 mb-1">Total Topics</p>
-              <p className="text-2xl font-bold text-white">{totalTopics}</p>
+      {activeTab === 'library' ? (
+        <div className="grid grid-cols-12 gap-8">
+          {/* Asset List */}
+          <div className="col-span-4 space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search assets..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-light/30 focus:outline-none focus:border-amber/50"
+              />
             </div>
-            <div className="rounded-xl bg-white/5 border border-white/10 p-4">
-              <p className="text-xs text-slate-light/60 mb-1">With Content</p>
-              <p className="text-2xl font-bold text-emerald">{coveredTopics}</p>
-            </div>
-            <div className="rounded-xl bg-white/5 border border-white/10 p-4">
-              <p className="text-xs text-slate-light/60 mb-1">Coverage</p>
-              <p className="text-2xl font-bold text-amber">{coveragePercent}%</p>
-            </div>
-            <div className="rounded-xl bg-white/5 border border-white/10 p-4">
-              <p className="text-xs text-slate-light/60 mb-1">Total Assets</p>
-              <p className="text-2xl font-bold text-sky">{MOCK_TOPIC_ASSETS.length}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 mb-6">
-            <button
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                !selectedSubject ? 'bg-white/10 text-white' : 'text-slate-light/60 hover:text-white'
-              }`}
-              onClick={() => setSelectedSubject(null)}
-            >
-              All Subjects
-            </button>
-            {MOCK_SUBJECTS.map((s) => (
-              <button
-                key={s.id}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  selectedSubject === s.id ? 'text-white' : 'text-slate-light/60 hover:text-white'
-                }`}
-                style={selectedSubject === s.id ? { backgroundColor: `${s.colour_hex}30`, color: s.colour_hex } : {}}
-                onClick={() => setSelectedSubject(s.id)}
-              >
-                {s.icon_emoji} {s.name}
-              </button>
-            ))}
-          </div>
-
-          <div className="rounded-xl border border-white/10 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-white/5">
-                  <th className="text-left px-4 py-3 text-xs font-bold text-slate-light/60">Topic</th>
-                  {ASSET_TYPES.map((at) => (
-                    <th key={at.type} className="px-3 py-3 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span style={{ color: at.colour }}>{at.icon}</span>
-                        <span className="text-[10px] text-slate-light/40">{at.label}</span>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ALL_TOPICS.filter((t) => !selectedSubject || t.subject_id === selectedSubject).map((topic) => {
-                  const subject = MOCK_SUBJECTS.find((s) => s.id === topic.subject_id);
-                  return (
-                    <tr key={topic.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{subject?.icon_emoji}</span>
-                          <div>
-                            <p className="text-sm text-white font-semibold">{topic.title}</p>
-                            <p className="text-xs text-slate-light/40">{subject?.name}</p>
-                          </div>
-                        </div>
-                      </td>
-                      {ASSET_TYPES.map((at) => (
-                        <td key={at.type} className="px-3 py-3 text-center">
-                          {hasAssetType(topic.id, at.type) ? (
-                            <span className="inline-flex w-6 h-6 rounded-full bg-emerald/20 items-center justify-center">
-                              <Check size={12} className="text-emerald" />
-                            </span>
-                          ) : (
-                            <span className="inline-flex w-6 h-6 rounded-full bg-white/5 items-center justify-center">
-                              <X size={12} className="text-slate-light/20" />
-                            </span>
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'generate' && (
-        <div className="max-w-2xl">
-          <h2 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-            Generate Content with AI
-          </h2>
-          <p className="text-sm text-slate-light/60 mb-6">
-            Select a topic and content types to generate. Claude will create age-appropriate content following the Luminary curriculum standards.
-          </p>
-
-          <div className="mb-6">
-            <label className="block text-sm font-bold text-white mb-2">Key Stage / Age Group</label>
-            <select
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
-              value={ageGroup}
-              onChange={(e) => setAgeGroup(e.target.value)}
-            >
-              {AGE_GROUPS.map((group) => (
-                <option key={group.value} value={group.value}>
-                  {group.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-bold text-white">Select Topic</label>
-              <button 
-                onClick={() => setUseCustomTopic(!useCustomTopic)}
-                className="text-xs text-amber hover:underline font-bold"
-              >
-                {useCustomTopic ? 'Select from curriculum' : 'Add custom topic'}
-              </button>
-            </div>
-
-            {useCustomTopic ? (
-              <div className="space-y-3 p-4 rounded-xl bg-white/5 border border-white/10">
-                <input
-                  type="text"
-                  placeholder="Topic Name (e.g., 'Photosynthesis')"
-                  className="w-full bg-navy border border-white/10 rounded-lg px-4 py-2 text-white text-sm"
-                  value={customTopicName}
-                  onChange={(e) => setCustomTopicName(e.target.value)}
-                />
-                <select
-                  className="w-full bg-navy border border-white/10 rounded-lg px-4 py-2 text-white text-sm"
-                  value={customSubjectId}
-                  onChange={(e) => setCustomSubjectId(e.target.value)}
-                >
-                  <option value="">Select Subject...</option>
-                  {MOCK_SUBJECTS.map(s => (
-                    <option key={s.id} value={s.id}>{s.icon_emoji} {s.name}</option>
-                  ))}
-                  <option value="other">Other / General</option>
-                </select>
-              </div>
-            ) : (
-              <select
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm"
-                value={generateTopicId}
-                onChange={(e) => setGenerateTopicId(e.target.value)}
-              >
-                <option value="">Choose a topic...</option>
-                {ALL_TOPICS.map((t) => {
-                  const subject = MOCK_SUBJECTS.find((s) => s.id === t.subject_id);
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {subject?.icon_emoji} {subject?.name} — {t.title}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-bold text-white mb-2">Content Types to Generate</label>
-            <div className="grid grid-cols-2 gap-2">
-              {ASSET_TYPES.map((at) => (
-                <label
-                  key={at.type}
-                  className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                    generateTypes.includes(at.type)
-                      ? 'border-amber bg-amber/10'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={generateTypes.includes(at.type)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setGenerateTypes([...generateTypes, at.type]);
-                      } else {
-                        setGenerateTypes(generateTypes.filter((t) => t !== at.type));
-                      }
-                    }}
-                    className="sr-only"
-                  />
-                  <span style={{ color: at.colour }}>{at.icon}</span>
-                  <span className="text-sm text-white">{at.label}</span>
-                  {generateTypes.includes(at.type) && <Check size={14} className="text-amber ml-auto" />}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber to-amber/80 text-navy font-bold text-sm disabled:opacity-50"
-              onClick={handleGenerate}
-              disabled={(!useCustomTopic && !generateTopicId) || (useCustomTopic && (!customTopicName || !customSubjectId)) || generateTypes.length === 0 || generating}
-            >
-              {generating ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" /> Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 size={16} /> Generate Selected Content
-                </>
-              )}
-            </button>
-            <button
-              className="px-6 py-3 rounded-xl bg-white/5 text-white font-bold text-sm hover:bg-white/10"
-              onClick={() => {
-                setGenerateTypes(ASSET_TYPES.map((at) => at.type));
-              }}
-            >
-              Select All
-            </button>
-          </div>
-
-          {generating && (
-            <div className="mt-6 p-4 rounded-xl bg-amber/10 border border-amber/20">
-              <div className="flex items-center gap-3">
-                <Loader2 size={20} className="text-amber animate-spin" />
-                <div>
-                  <p className="text-sm text-white font-bold">Generating content...</p>
-                  <p className="text-xs text-slate-light/60">
-                    Claude is creating age-appropriate content for this topic. This may take 30-60 seconds.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'review' && (
-        <div>
-          <div className="flex items-start justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-                Review & Preview Content
-              </h2>
-              <p className="text-sm text-slate-light/60">
-                Open any generated asset to see how it will look for a learner, then edit the JSON only if you need to refine it.
-              </p>
-            </div>
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-sm font-bold hover:bg-white/10"
-              onClick={handleBackToGenerate}
-            >
-              <ArrowLeft size={16} /> Back to Generate
-            </button>
-          </div>
-
-          <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-3 space-y-2">
-              {reviewList.map((asset) => {
-                const at = ASSET_TYPES.find((a) => a.type === asset.asset_type);
-                const topic = ALL_TOPICS.find((t) => t.id === asset.topic_id);
+            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+              {MOCK_TOPIC_ASSETS.map((asset) => {
+                const typeInfo = ASSET_TYPES.find((t) => t.type === asset.asset_type);
                 return (
                   <button
                     key={asset.id}
-                    className={`w-full text-left p-3 rounded-xl border transition-all ${
-                      reviewAsset?.id === asset.id ? 'border-amber bg-amber/10' : 'border-white/10 bg-white/5 hover:border-white/20'
+                    onClick={() => setSelectedAsset(asset)}
+                    className={`w-full text-left p-4 rounded-xl border transition-all ${
+                      selectedAsset?.id === asset.id
+                        ? 'border-amber bg-amber/10'
+                        : 'border-white/10 bg-white/5 hover:border-white/20'
                     }`}
-                    onClick={() => handleReview(asset)}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span style={{ color: at?.colour }}>{at?.icon}</span>
-                      <span className="text-xs font-bold" style={{ color: at?.colour }}>{at?.label}</span>
-                      <span
-                        className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full ${
-                          asset.status === 'published' ? 'bg-emerald/20 text-emerald' : 'bg-amber/20 text-amber'
-                        }`}
+                    <div className="flex items-center gap-3 mb-2">
+                      <div
+                        className="p-1.5 rounded-lg"
+                        style={{ backgroundColor: `${typeInfo?.colour}20`, color: typeInfo?.colour }}
                       >
+                        {typeInfo?.icon}
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-light/40">
+                        {typeInfo?.label}
+                      </span>
+                    </div>
+                    <h3 className="text-white font-bold text-sm mb-1">{asset.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-light/60">
+                        Age {asset.age_group}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald/10 text-emerald">
                         {asset.status}
                       </span>
                     </div>
-                    <p className="text-sm text-white font-semibold line-clamp-2">{asset.title}</p>
-                    <p className="text-[11px] text-slate-light/40 mt-1">{topic?.title ?? 'Unassigned topic'}</p>
                   </button>
                 );
               })}
             </div>
+          </div>
 
-            <div className="col-span-9">
-              {reviewAsset ? (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span
-                            className="text-[10px] uppercase tracking-[0.2em] px-2 py-1 rounded-full border border-white/10 bg-white/5 text-slate-light/60"
-                          >
-                            Learner Preview
-                          </span>
-                          {reviewSubject && (
-                            <span
-                              className="text-[10px] uppercase tracking-[0.2em] px-2 py-1 rounded-full font-bold"
-                              style={{ backgroundColor: `${reviewSubject.colour_hex}20`, color: reviewSubject.colour_hex }}
-                            >
-                              {reviewSubject.name}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-lg font-bold text-white">{reviewAsset.title}</h3>
-                        <p className="text-xs text-slate-light/60 mt-1">
-                          {reviewTopic?.title ?? 'Unknown topic'} • {reviewAsset.asset_type}
-                          {reviewAsset.asset_subtype ? ` (${reviewAsset.asset_subtype})` : ''} • {reviewAsset.age_group}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={handlePublish}
-                          className="px-3 py-1.5 rounded-lg bg-emerald/20 text-emerald text-xs font-bold hover:bg-emerald/30"
-                        >
-                          <Check size={12} className="inline mr-1" /> Publish
-                        </button>
-                        <button
-                          className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/30"
-                        >
-                          <Trash2 size={12} className="inline mr-1" /> Reject
-                        </button>
-                        <button
-                          className="px-3 py-1.5 rounded-lg bg-white/5 text-white text-xs font-bold hover:bg-white/10"
-                          onClick={handleBackToList}
-                        >
-                          <ArrowLeft size={12} className="inline mr-1" /> Back to List
-                        </button>
-                      </div>
+          {/* Preview Area */}
+          <div className="col-span-8">
+            {selectedAsset ? (
+              <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-amber/20 text-amber">
+                      {ASSET_TYPES.find((t) => t.type === selectedAsset.asset_type)?.icon}
                     </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-navy/50 p-4">
-                      <AdminAssetPreview
-                        asset={reviewAsset}
-                        diagrams={[MOCK_FRACTION_BAR_DIAGRAM]}
-                        subjectColour={reviewSubject?.colour_hex ?? '#8B5CF6'}
-                      />
+                    <div>
+                      <h2 className="text-xl font-bold text-white">{selectedAsset.title}</h2>
+                      <p className="text-sm text-slate-light/60">
+                        {selectedAsset.asset_type.replace('_', ' ')} • Age {selectedAsset.age_group}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Sparkles size={16} className="text-amber" />
-                      <p className="text-sm font-bold text-white">Structured Content Editor</p>
-                    </div>
-                    <p className="text-xs text-slate-light/50 mb-3">
-                      You can still edit the underlying structure here, but the preview above shows how the learner experience will actually look.
-                    </p>
-                    <textarea
-                      className="w-full h-72 bg-navy border border-white/10 rounded-xl p-4 text-sm text-white font-mono resize-none"
-                      value={editJson}
-                      onChange={(e) => setEditJson(e.target.value)}
+                  <div className="flex items-center gap-2">
+                    <button className="p-2 rounded-lg bg-white/5 text-slate-light/60 hover:text-white hover:bg-white/10 transition-all">
+                      <Edit size={18} />
+                    </button>
+                    <button className="p-2 rounded-lg bg-white/5 text-slate-light/60 hover:text-white hover:bg-white/10 transition-all">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-8">
+                  <AdminAssetPreview 
+                    asset={selectedAsset} 
+                    subjectColour={MOCK_SUBJECTS.find(s => s.id === (ALL_TOPICS.find(t => t.id === selectedAsset.topic_id)?.subject_id))?.colour_hex || '#F59E0B'} 
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="h-[600px] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl text-slate-light/20">
+                <LayoutDashboard size={48} className="mb-4" />
+                <p className="text-lg font-medium">Select an asset to preview</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-3xl mx-auto space-y-8">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-8">
+            {/* Topic Selection */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-bold text-white uppercase tracking-wider">
+                  1. Select Topic
+                </label>
+                <button 
+                  onClick={() => setUseCustomTopic(!useCustomTopic)}
+                  className="text-xs text-amber hover:underline"
+                >
+                  {useCustomTopic ? "Use curriculum topic" : "Add custom topic"}
+                </button>
+              </div>
+              
+              {useCustomTopic ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-light/40">Topic Name</label>
+                    <input
+                      type="text"
+                      value={customTopicName}
+                      onChange={(e) => setCustomTopicName(e.target.value)}
+                      placeholder="e.g. The Water Cycle"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber/50"
                     />
-                    <div className="flex gap-2 mt-4">
-                      <button onClick={handleSaveChanges} className="px-4 py-2 rounded-lg bg-amber/20 text-amber text-sm font-bold hover:bg-amber/30">
-                        <Edit size={14} className="inline mr-1" /> Save Changes
-                      </button>
-                      <button
-                        className="px-4 py-2 rounded-lg bg-white/5 text-white text-sm font-bold hover:bg-white/10"
-                        onClick={() => setEditJson(JSON.stringify(reviewAsset.content_json, null, 2))}
-                      >
-                        Reset
-                      </button>
-                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-light/40">Subject</label>
+                    <select
+                      value={customSubjectId}
+                      onChange={(e) => setCustomSubjectId(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber/50"
+                    >
+                      <option value="">Select Subject</option>
+                      {MOCK_SUBJECTS.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                      <option value="other">Other / General</option>
+                    </select>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
-                  <Eye size={32} className="text-slate-light/30 mx-auto mb-3" />
-                  <p className="text-white font-semibold mb-2">Choose an asset to preview</p>
-                  <p className="text-slate-light/50 text-sm mb-6">
-                    The review area now shows a learner-facing preview instead of just raw JSON.
-                  </p>
-                  <button
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-sm font-bold hover:bg-white/10"
-                    onClick={handleBackToGenerate}
-                  >
-                    <ArrowLeft size={16} /> Back to Generate
-                  </button>
-                </div>
+                <select
+                  value={generateTopicId}
+                  onChange={(e) => setGenerateTopicId(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber/50"
+                >
+                  <option value="">Choose a topic...</option>
+                  {ALL_TOPICS.map((topic) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.title}
+                    </option>
+                  ))}
+                </select>
               )}
+            </div>
+
+            {/* Age Group */}
+            <div className="space-y-4">
+              <label className="text-sm font-bold text-white uppercase tracking-wider">
+                2. Target Age Group
+              </label>
+              <div className="grid grid-cols-4 gap-3">
+                {['5-7', '8-11', '12-14', '15-16'].map((age) => (
+                  <button
+                    key={age}
+                    onClick={() => setAgeGroup(age)}
+                    className={`py-3 rounded-xl border font-bold transition-all ${
+                      ageGroup === age
+                        ? 'border-amber bg-amber text-navy'
+                        : 'border-white/10 bg-white/5 text-slate-light/60 hover:border-white/20'
+                    }`}
+                  >
+                    {age}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Asset Types */}
+            <div className="space-y-4">
+              <label className="text-sm font-bold text-white uppercase tracking-wider">
+                3. Content to Generate
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {ASSET_TYPES.map((type) => (
+                  <button
+                    key={type.type}
+                    onClick={() => toggleAssetType(type.type)}
+                    className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${
+                      selectedAssetTypes.includes(type.type)
+                        ? 'border-amber bg-amber/10 text-white'
+                        : 'border-white/10 bg-white/5 text-slate-light/60 hover:border-white/20'
+                    }`}
+                  >
+                    <div
+                      className="p-2 rounded-lg"
+                      style={{
+                        backgroundColor: selectedAssetTypes.includes(type.type)
+                          ? type.colour
+                          : `${type.colour}20`,
+                        color: selectedAssetTypes.includes(type.type) ? '#0a0e1a' : type.colour,
+                      }}
+                    >
+                      {type.icon}
+                    </div>
+                    <span className="font-semibold">{type.label}</span>
+                    {selectedAssetTypes.includes(type.type) && (
+                      <Check size={16} className="ml-auto text-amber" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={handleGenerate}
+              disabled={generating || (!useCustomTopic && !generateTopicId) || (useCustomTopic && !customTopicName) || selectedAssetTypes.length === 0}
+              className="w-full py-4 rounded-2xl bg-amber text-navy font-bold text-lg flex items-center justify-center gap-3 hover:bg-amber/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber/20"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Generating Assets...
+                </>
+              ) : (
+                <>
+                  <Wand2 size={20} />
+                  Generate Selected Content
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="flex items-start gap-4 p-6 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+            <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <h4 className="text-white font-bold mb-1">AI-Powered Generation</h4>
+              <p className="text-sm text-slate-light/60 leading-relaxed">
+                Our AI will generate curriculum-aligned content tailored to the selected age group. 
+                This includes teaching explanations, interactive questions, and real-world applications.
+              </p>
             </div>
           </div>
         </div>

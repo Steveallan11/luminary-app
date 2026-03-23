@@ -274,7 +274,6 @@ export default function AdminLessonsPage() {
           title: customTopicName,
           subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
           description: `Custom topic: ${customTopicName}`,
-          key_stage: keyStage,
           slug: slug || `custom-${Date.now()}`,
           order_index: 0,
         };
