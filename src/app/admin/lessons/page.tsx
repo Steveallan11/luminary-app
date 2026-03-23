@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { createClientComponentClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import {
   Wand2,
   Check,
@@ -47,10 +47,10 @@ interface LessonBrief {
 }
 
 export default function AdminLessonsPage() {
-  const supabase = createClientComponentClient({
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const [activeView, setActiveView] = useState<'generate' | 'queue' | 'review'>('generate');
 
   // Generation form state

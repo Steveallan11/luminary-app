@@ -86,6 +86,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.2.1
@@ -2168,6 +2171,10 @@ packages:
 
   utrie@1.0.2:
     resolution: {integrity: sha512-1MLa5ouZiOmQzUbjbu9VmjLzn1QLXBhwpUa7kdLUQK+KQ5KA9I1vk5U4YHe/X2Ch7PYnJfWuWT+VbuxbGwljhw==}
+
+  uuid@13.0.0:
+    resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
+    hasBin: true
 
   vite-compatible-readable-stream@3.6.1:
     resolution: {integrity: sha512-t20zYkrSf868+j/p31cRIGN28Phrjm3nRSLR2fyc2tiWi4cZGVdv68yNlwnIINTkMTmPoMiSlc0OadaO7DXZaQ==}
@@ -4585,6 +4592,8 @@ snapshots:
     dependencies:
       base64-arraybuffer: 1.0.2
     optional: true
+
+  uuid@13.0.0: {}
 
   vite-compatible-readable-stream@3.6.1:
     dependencies:
