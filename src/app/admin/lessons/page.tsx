@@ -185,6 +185,13 @@ export default function AdminLessonsPage() {
 
       if (useCustomTopic) {
         // Create a temporary topic in Supabase
+        const slug = customTopicName
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
         const { data: newTopic, error: topicError } = await supabase
           .from('topics')
           .insert({
@@ -192,13 +199,16 @@ export default function AdminLessonsPage() {
             subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
             description: `Custom topic: ${customTopicName}`,
             key_stage: keyStage,
-            slug: customTopicName.toLowerCase().replace(/\s+/g, '-'),
+            slug: slug || `custom-${Date.now()}`,
+            order_index: 0,
+            estimated_minutes: 20,
           })
           .select()
           .single();
 
         if (topicError || !newTopic) {
-          throw new Error(`Failed to create custom topic: ${topicError?.message}`);
+          console.error('Supabase topic creation error:', topicError);
+          throw new Error(`Failed to create custom topic: ${topicError?.message || 'Unknown error'}`);
         }
         topicId = newTopic.id;
       }

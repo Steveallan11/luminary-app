@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import {
   LayoutDashboard,
   Wand2,
@@ -106,6 +107,13 @@ export default function AdminContentPage() {
       if (useCustomTopic) {
         // Create custom topic in Supabase
         const subject = MOCK_SUBJECTS.find(s => s.id === customSubjectId);
+        const slug = customTopicName
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
         const { data: newTopic, error: topicError } = await supabase
           .from('topics')
           .insert({
@@ -113,13 +121,16 @@ export default function AdminContentPage() {
             subject_id: customSubjectId === 'other' ? '00000000-0000-0000-0000-000000000000' : customSubjectId,
             description: `Custom topic: ${customTopicName}`,
             key_stage: keyStage,
-            slug: customTopicName.toLowerCase().replace(/\s+/g, '-'),
+            slug: slug || `custom-${Date.now()}`,
+            order_index: 0,
+            estimated_minutes: 20,
           })
           .select()
           .single();
 
         if (topicError || !newTopic) {
-          throw new Error(`Failed to create custom topic: ${topicError?.message}`);
+          console.error('Supabase topic creation error:', topicError);
+          throw new Error(`Failed to create custom topic: ${topicError?.message || 'Unknown error'}`);
         }
         topicId = newTopic.id;
         topicTitle = customTopicName;

@@ -1,0 +1,103 @@
+
+> luminary@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/41) ...
+   Generating static pages (10/41) 
+Visual search error: B [Error]: Dynamic server usage: Route /api/lumi/visual-search couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:21778)
+    at Object.get (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:29465)
+    at c (/home/ubuntu/luminary/.next/server/app/api/lumi/visual-search/route.js:1:553)
+    at /home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:38417
+    at /home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/trace/tracer.js:140:36
+    at NoopContextManager.with (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:7062)
+    at ContextAPI.with (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:518)
+    at NoopTracer.startActiveSpan (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18093)
+    at ProxyTracer.startActiveSpan (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18854)
+    at /home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/trace/tracer.js:122:103 {
+  description: "Route /api/lumi/visual-search couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+Parent dashboard error: B [Error]: Dynamic server usage: Route /api/parent/dashboard couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:21778)
+    at Object.get (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:29465)
+    at u (/home/ubuntu/luminary/.next/server/app/api/parent/dashboard/route.js:1:1512)
+    at /home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:38417
+    at /home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/trace/tracer.js:140:36
+    at NoopContextManager.with (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:7062)
+    at ContextAPI.with (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:518)
+    at NoopTracer.startActiveSpan (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18093)
+    at ProxyTracer.startActiveSpan (/home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/compiled/@opentelemetry/api/index.js:1:18854)
+    at /home/ubuntu/luminary/node_modules/.pnpm/next@14.2.35_@babel+core@7.29.0_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/next/dist/server/lib/trace/tracer.js:122:103 {
+  description: "Route /api/parent/dashboard couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+   Generating static pages (20/41) 
+   Generating static pages (30/41) 
+ ✓ Generating static pages (41/41)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    4.32 kB         145 kB
+├ ○ /_not-found                          142 B          87.4 kB
+├ ○ /achievements                        6.49 kB         147 kB
+├ ƒ /admin/content                       7.67 kB         210 kB
+├ ƒ /admin/images                        3.79 kB        94.8 kB
+├ ƒ /admin/lessons                       3.98 kB         146 kB
+├ ƒ /admin/library                       4.54 kB         143 kB
+├ ƒ /admin/performance                   3.4 kB         90.7 kB
+├ ƒ /admin/reports                       2.81 kB        93.8 kB
+├ ƒ /admin/safety                        2.9 kB         90.2 kB
+├ ƒ /api/admin/approve-lesson            0 B                0 B
+├ ƒ /api/admin/auto-brief                0 B                0 B
+├ ƒ /api/admin/generate-content          0 B                0 B
+├ ƒ /api/admin/generate-images           0 B                0 B
+├ ƒ /api/admin/generate-lesson           0 B                0 B
+├ ƒ /api/admin/login                     0 B                0 B
+├ ƒ /api/admin/publish-content           0 B                0 B
+├ ƒ /api/admin/queue-generation          0 B                0 B
+├ ƒ /api/admin/reject-lesson             0 B                0 B
+├ ƒ /api/admin/save-content              0 B                0 B
+├ ƒ /api/content/game-result             0 B                0 B
+├ ƒ /api/content/generate-worksheet      0 B                0 B
+├ ƒ /api/lesson/generate                 0 B                0 B
+├ ƒ /api/lesson/start                    0 B                0 B
+├ ƒ /api/lumi/chat                       0 B                0 B
+├ ƒ /api/lumi/opening-message            0 B                0 B
+├ ƒ /api/lumi/session-end                0 B                0 B
+├ ƒ /api/lumi/verify-image               0 B                0 B
+├ ƒ /api/lumi/visual-search              0 B                0 B
+├ ƒ /api/parent/dashboard                0 B                0 B
+├ ƒ /api/reports/generate                0 B                0 B
+├ ƒ /api/stripe/checkout                 0 B                0 B
+├ ƒ /api/stripe/webhook                  0 B                0 B
+├ ○ /auth/login                          6.08 kB         143 kB
+├ ○ /auth/onboarding                     6.22 kB         143 kB
+├ ○ /auth/signup                         2.55 kB         139 kB
+├ ○ /demo                                2.46 kB         148 kB
+├ ○ /learn                               4.06 kB         144 kB
+├ ƒ /learn/[slug]                        6.83 kB         147 kB
+├ ƒ /learn/[slug]/[topic]                14.1 kB         225 kB
+├ ○ /parent                              5.62 kB         146 kB
+├ ○ /pricing                             3.53 kB         144 kB
+├ ○ /profile                             3.98 kB         144 kB
+├ ○ /progress                            2.88 kB         143 kB
+├ ○ /robots.txt                          0 B                0 B
+└ ○ /sitemap.xml                         0 B                0 B
++ First Load JS shared by all            87.3 kB
+  ├ chunks/222-197dc428b9054760.js       31.7 kB
+  ├ chunks/dbae917e-80f89750d88b7c47.js  53.6 kB
+  └ other shared chunks (total)          1.95 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
