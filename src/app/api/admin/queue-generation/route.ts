@@ -37,9 +37,12 @@ export async function POST(req: NextRequest) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topic_id);
     
     if (!isUuid || topic_id === '00000000-0000-0000-0000-000000000000') {
-      // If not a valid UUID, we need a fallback to satisfy NOT NULL constraint
-      // We'll use a hardcoded UUID that should exist or at least satisfy the format
-      safeTopicId = '00000000-0000-0000-0000-000000000000';
+      // If not a valid UUID, we need a real fallback to satisfy NOT NULL and FOREIGN KEY constraints
+      const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+      if (!fallbackTopic) {
+        throw new Error('No topics found in database to use as fallback. Please create at least one topic first.');
+      }
+      safeTopicId = fallbackTopic.id;
     } else {
       // Verify it actually exists in the topics table
       const { data: topicExists } = await supabase
@@ -49,8 +52,12 @@ export async function POST(req: NextRequest) {
         .single();
       
       if (!topicExists) {
-        console.warn(`[queue-generation] Topic ${topic_id} not found in database, using hardcoded fallback`);
-        safeTopicId = '00000000-0000-0000-0000-000000000000';
+        console.warn(`[queue-generation] Topic ${topic_id} not found in database, fetching real fallback`);
+        const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+        if (!fallbackTopic) {
+          throw new Error('No topics found in database to use as fallback.');
+        }
+        safeTopicId = fallbackTopic.id;
       }
     }
 

@@ -293,15 +293,23 @@ export default function AdminLessonsPage() {
             .single();
 
           if (topicError || !newTopic) {
-            console.warn('Supabase topic creation failed, using hardcoded fallback ID:', topicError);
-            // Hardcoded fallback UUID to satisfy NOT NULL constraint
-            topicId = '00000000-0000-0000-0000-000000000000';
+            console.warn('Supabase topic creation failed, fetching a real fallback ID from database:', topicError);
+            // Fetch the first available topic to use as a fallback ID to satisfy NOT NULL and FOREIGN KEY constraints
+            const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+            if (!fallbackTopic) {
+              throw new Error('No topics found in database to use as fallback. Please create at least one topic first.');
+            }
+            topicId = fallbackTopic.id;
           } else {
             topicId = newTopic.id;
           }
         } catch (e) {
           console.error('Exception during topic creation:', e);
-          topicId = '00000000-0000-0000-0000-000000000000';
+          const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+          if (!fallbackTopic) {
+            throw new Error('No topics found in database to use as fallback.');
+          }
+          topicId = fallbackTopic.id;
         }
       }
 
