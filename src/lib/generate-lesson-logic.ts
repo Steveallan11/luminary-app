@@ -18,8 +18,21 @@ export async function generateLessonLogic(body: any, jobId: string) {
 
   try {
     console.log(`[generate-lesson-logic] Job ${jobId} started`);
-    console.log("NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL + ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY + ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY + ", OPENAI_API_KEY (present): " + !!process.env.OPENAI_API_KEY);
-    
+    console.log(
+      "NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL +
+      ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY +
+      ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY
+    );
+
+    // Update progress: starting
+    await supabase
+      .from('generation_jobs')
+      .update({ progress: 20 })
+      .eq('id', jobId);
+
+    // Normalise the brief — handle both flat body and nested brief object
+    const briefSource = body.brief || body;
+
     const brief: TopicBrief = {
       topic_id: body.topic_id,
       title: body.title,
@@ -27,26 +40,57 @@ export async function generateLessonLogic(body: any, jobId: string) {
       key_stage: body.key_stage ?? 'KS2',
       age_group: body.age_group ?? '8-11',
       estimated_minutes: body.estimated_minutes ?? 30,
-      key_concepts: Array.isArray(body.key_concepts) ? body.key_concepts : (body.key_concepts?.split(',') ?? []).map((s: string) => s.trim()),
-      common_misconceptions: Array.isArray(body.common_misconceptions) ? body.common_misconceptions : (body.common_misconceptions?.split(',') ?? []).map((s: string) => s.trim()),
-      real_world_examples: Array.isArray(body.real_world_examples) ? body.real_world_examples : (body.real_world_examples?.split(',') ?? []).map((s: string) => s.trim()),
-      curriculum_objectives: Array.isArray(body.curriculum_objectives) ? body.curriculum_objectives : (body.curriculum_objectives?.split('\n') ?? []).map((s: string) => s.trim()).filter((s: string) => s.length > 0),
+      key_concepts: Array.isArray(briefSource.keyConcepts)
+        ? briefSource.keyConcepts
+        : Array.isArray(briefSource.key_concepts)
+        ? briefSource.key_concepts
+        : (briefSource.key_concepts?.split(',') ?? []).map((s: string) => s.trim()),
+      common_misconceptions: Array.isArray(briefSource.misconceptions)
+        ? briefSource.misconceptions
+        : Array.isArray(briefSource.common_misconceptions)
+        ? briefSource.common_misconceptions
+        : (briefSource.common_misconceptions?.split(',') ?? []).map((s: string) => s.trim()),
+      real_world_examples: Array.isArray(briefSource.realWorldExamples)
+        ? briefSource.realWorldExamples
+        : Array.isArray(briefSource.real_world_examples)
+        ? briefSource.real_world_examples
+        : (briefSource.real_world_examples?.split(',') ?? []).map((s: string) => s.trim()),
+      curriculum_objectives: Array.isArray(briefSource.curriculumObjectives)
+        ? briefSource.curriculumObjectives
+        : Array.isArray(briefSource.curriculum_objectives)
+        ? briefSource.curriculum_objectives
+        : (briefSource.curriculum_objectives?.split('\n') ?? []).map((s: string) => s.trim()).filter((s: string) => s.length > 0),
     };
 
     if (!brief.title || !brief.subject_name) {
       console.error(`[generate-lesson-logic] Job ${jobId} failed: title and subject_name are required`);
-      await supabase.from('generation_jobs').update({ status: 'failed', error_message: 'Title and subject name are required' }).eq('id', jobId);
+      await supabase
+        .from('generation_jobs')
+        .update({ status: 'failed', error_message: 'Title and subject name are required' })
+        .eq('id', jobId);
       return;
     }
 
     console.log(`[generate-lesson-logic] Job ${jobId} Brief prepared:`, brief);
+
+    // Update progress: calling Claude
+    await supabase
+      .from('generation_jobs')
+      .update({ progress: 30 })
+      .eq('id', jobId);
+
     console.log(`[generate-lesson-logic] Job ${jobId} Calling generateLessonStructure...`);
     const structure = await generateLessonStructure(brief);
     console.log(`[generate-lesson-logic] Job ${jobId} Structure generated successfully`);
+
+    // Update progress: Claude responded, saving to DB
+    await supabase
+      .from('generation_jobs')
+      .update({ progress: 80 })
+      .eq('id', jobId);
+
     const qualityScore = scoreLessonQuality(structure);
     console.log(`[generate-lesson-logic] Job ${jobId} Quality score: ${qualityScore}`);
-
-    console.log(`[generate-lesson-logic] Job ${jobId} Supabase client created. Attempting to insert lesson structure...`);
 
     const { data, error } = await supabase
       .from('topic_lesson_structures')
@@ -75,21 +119,25 @@ export async function generateLessonLogic(body: any, jobId: string) {
     if (error) {
       console.error(`[generate-lesson-logic] Job ${jobId} Supabase insert error:`, error);
       console.error(`[generate-lesson-logic] Job ${jobId} Supabase error details:`, JSON.stringify(error));
-      await supabase.from('generation_jobs').update({ status: 'failed', error_message: `Failed to save lesson: ${error.message}` }).eq('id', jobId);
+      await supabase
+        .from('generation_jobs')
+        .update({ status: 'failed', error_message: `Failed to save lesson: ${error.message}` })
+        .eq('id', jobId);
       return;
     }
 
     const lessonId = data?.id;
     console.log(`[generate-lesson-logic] Job ${jobId} Lesson saved to Supabase: ${lessonId}`);
-    console.log(`[generate-lesson-logic] Job ${jobId} Checking for assets to create...`);
 
+    // Create linked assets (concept card, game, real-world card)
     if (lessonId) {
       const assetsToCreate = [];
 
       const generateImage = async (prompt: string) => {
         if (!process.env.OPENAI_API_KEY) return null;
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/generate-images`, {
+          const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+          const res = await fetch(`${appUrl}/api/admin/generate-images`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt }),
@@ -155,29 +203,36 @@ export async function generateLessonLogic(body: any, jobId: string) {
         const { error: assetsError } = await supabase
           .from('topic_assets')
           .insert(assetsToCreate);
-        
+
         if (assetsError) {
           console.error(`[generate-lesson-logic] Job ${jobId} Failed to create linked assets:`, assetsError);
-          console.error(`[generate-lesson-logic] Job ${jobId} Assets error details:`, JSON.stringify(assetsError));
         } else {
           console.log(`[generate-lesson-logic] Job ${jobId} Created ${assetsToCreate.length} linked assets`);
         }
       }
     }
 
-    await supabase.from('generation_jobs').update({
-      status: 'completed',
-      progress: 100,
-      result_id: lessonId,
-      completed_at: new Date().toISOString()
-    }).eq('id', jobId);
+    await supabase
+      .from('generation_jobs')
+      .update({
+        status: 'completed',
+        progress: 100,
+        result_id: lessonId,
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', jobId);
+
     console.log(`[generate-lesson-logic] Job ${jobId} completed successfully`);
 
   } catch (error: unknown) {
-    console.error(`[generate-lesson-logic] Job ${jobId} Uncaught error in generate-lesson-logic:`, error);
+    console.error(`[generate-lesson-logic] Job ${jobId} Uncaught error:`, error);
     const message = error instanceof Error ? error.message : 'Failed to generate lesson';
     const stack = error instanceof Error ? error.stack : '';
     console.error(`[generate-lesson-logic] Job ${jobId} Stack:`, stack);
-    await supabase.from('generation_jobs').update({ status: 'failed', error_message: message }).eq('id', jobId);
+    await supabase
+      .from('generation_jobs')
+      .update({ status: 'failed', error_message: message })
+      .eq('id', jobId);
+    throw error; // Re-throw so the caller knows it failed
   }
 }

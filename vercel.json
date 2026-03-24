@@ -1,3 +1,23 @@
 {
-  "installCommand": "pnpm install --no-frozen-lockfile"
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "functions": {
+    "src/app/api/admin/queue-generation/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/generate-lesson/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/auto-brief/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/generate-content/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/lumi/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/lumi/opening-message/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

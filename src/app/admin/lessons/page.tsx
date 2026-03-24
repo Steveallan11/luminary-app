@@ -322,13 +322,23 @@ export default function AdminLessonsPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setLatestJob({ id: data.job_id, status: 'pending', progress: 0, topic_title: customTopicName });
-        setIsPolling(true);
+        // The API now runs synchronously — status is already final when we get the response
+        setLatestJob({
+          id: data.job_id,
+          status: data.status || 'completed',
+          progress: data.status === 'completed' ? 100 : data.status === 'failed' ? 0 : 50,
+          topic_title: customTopicName,
+          error_message: data.error_message || null,
+        });
+        // Only poll if somehow still processing (shouldn't happen with sync API)
+        if (data.status === 'processing') {
+          setIsPolling(true);
+        }
         setActiveView('review');
         fetchLessons();
       } else {
         const err = await res.json();
-        setGenerationError(err.error || 'Failed to queue generation');
+        setGenerationError(err.error || 'Failed to generate lesson');
       }
     } catch (err: any) {
       setGenerationError(err.message || 'An unexpected error occurred');
@@ -503,7 +513,7 @@ export default function AdminLessonsPage() {
                     Generate Full Lesson Structure
                   </button>
                   <p className="text-center text-[10px] text-slate-light/30 mt-3 uppercase tracking-widest">
-                    Powered by Claude 3.5 Sonnet • ~30s generation time
+                    Powered by Claude Opus 4.6 • ~30-60s generation time
                   </p>
                 </div>
               </div>

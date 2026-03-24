@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, LUMI_MODEL } from '@/lib/anthropic';
+import { getAnthropicClient, LUMI_FAST_MODEL } from '@/lib/anthropic';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * POST /api/admin/auto-brief
@@ -37,7 +38,7 @@ Ensure the content is age-appropriate and follows the UK National Curriculum sta
 Return ONLY the JSON object, no markdown formatting, no code fences.`;
 
     const response = await client.messages.create({
-      model: LUMI_MODEL,
+      model: LUMI_FAST_MODEL,
       max_tokens: 1000,
       messages: [
         {

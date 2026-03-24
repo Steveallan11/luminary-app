@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { generateLessonLogic } from '@/lib/generate-lesson-logic'; // Import the logic
+import { generateLessonLogic } from '@/lib/generate-lesson-logic';
+
+// Extend Vercel function timeout to 300 seconds (5 minutes) — required for Claude API calls
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,13 +99,18 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to queue generation: ${error.message}`);
     }
 
-    // Directly invoke the lesson generation logic in a non-blocking way
     if (type === 'lesson') {
-      console.log(`[queue-generation] Directly invoking generateLessonLogic for job ${jobId}`);
-      generateLessonLogic({ ...body, topic_id: safeTopicId }, jobId);
+      // Run lesson generation synchronously — Vercel will keep the function alive
+      // for up to maxDuration seconds, so Claude has time to respond.
+      console.log(`[queue-generation] Running lesson generation synchronously for job ${jobId}`);
+      try {
+        await generateLessonLogic({ ...body, topic_id: safeTopicId }, jobId);
+        console.log(`[queue-generation] Lesson generation completed for job ${jobId}`);
+      } catch (genError: any) {
+        console.error(`[queue-generation] Lesson generation failed for job ${jobId}:`, genError);
+        // generateLessonLogic already updates the job status to 'failed' internally
+      }
     } else if (type === 'content') {
-      // For content generation, we might need a similar direct invocation or a dedicated background function
-      // For now, keep the fetch for content generation if it was working or needs separate handling
       const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
       const endpoint = '/api/admin/generate-content';
       console.log(`[queue-generation] Triggering background content task: ${appUrl}${endpoint}`);
@@ -139,11 +147,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Re-fetch the job to return the latest status
+    const { data: jobData } = await supabase
+      .from('generation_jobs')
+      .select('status, result_id, error_message, progress')
+      .eq('id', jobId)
+      .single();
+
     return NextResponse.json({
       success: true,
       job_id: jobId,
-      status: 'processing',
-      message: 'Generation started.',
+      status: jobData?.status || 'processing',
+      result_id: jobData?.result_id || null,
+      error_message: jobData?.error_message || null,
+      message: type === 'lesson' 
+        ? (jobData?.status === 'completed' ? 'Lesson generated successfully.' : 'Generation failed — check error_message.')
+        : 'Generation started.',
     });
   } catch (error: any) {
     console.error('[queue-generation] Error:', error);

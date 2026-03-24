@@ -1,6 +1,24 @@
 import Stripe from 'stripe';
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Lazy-initialize Stripe to avoid build-time errors when env vars aren't set
+let _stripe: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error('STRIPE_SECRET_KEY is not configured.');
+    }
+    _stripe = new Stripe(key, {
+      apiVersion: '2024-12-18.acacia' as Stripe.LatestApiVersion,
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
+
+// Keep backward-compatible export for existing code
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_placeholder_for_build', {
   apiVersion: '2024-12-18.acacia' as Stripe.LatestApiVersion,
   typescript: true,
 });
