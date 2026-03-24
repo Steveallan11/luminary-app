@@ -164,7 +164,7 @@ export async function generateLessonStructure(
   try {
     const response = await client.messages.create({
       model: LUMI_MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [
         {
           role: 'user',
