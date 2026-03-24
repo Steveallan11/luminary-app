@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Trigger background generation
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
     console.log(`[queue-generation] NEXT_PUBLIC_APP_URL: ${process.env.NEXT_PUBLIC_APP_URL}`);
     console.log(`[queue-generation] Resolved appUrl: ${appUrl}`);
     const endpoint = type === 'lesson' ? '/api/admin/generate-lesson' : '/api/admin/generate-content';
