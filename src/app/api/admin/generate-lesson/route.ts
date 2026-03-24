@@ -8,7 +8,8 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('[generate-lesson] Request received');
+    console.log("[generate-lesson] Request received");
+    console.log("[generate-lesson] Environment variables: NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL + ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY + ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY + ", OPENAI_API_KEY (present): " + !!process.env.OPENAI_API_KEY);
     const body = await req.json();
     console.log('[generate-lesson] Request body:', body);
 
@@ -32,9 +33,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log('[generate-lesson] Brief prepared:', brief);
+    console.log("[generate-lesson] Brief prepared:", brief);
+    console.log("[generate-lesson] Calling generateLessonStructure...");
     const structure = await generateLessonStructure(brief);
-    console.log('[generate-lesson] Structure generated successfully');
+    console.log("[generate-lesson] Structure generated successfully");
+    console.log("[generate-lesson] Quality score: " + qualityScore);
     const qualityScore = scoreLessonQuality(structure);
 
     // Save to Supabase
@@ -46,6 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log("[generate-lesson] Supabase client created. Attempting to insert lesson structure...");
 
     const { data, error } = await supabase
       .from('topic_lesson_structures')
@@ -74,12 +78,14 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error('[generate-lesson] Supabase insert error:', error);
+      console.error("[generate-lesson] Supabase insert error:", error);
+    console.error("[generate-lesson] Supabase error details:", JSON.stringify(error));
       throw new Error(`Failed to save lesson: ${error.message}`);
     }
 
     const lessonId = data?.id;
-    console.log('[generate-lesson] Lesson saved to Supabase:', lessonId);
+    console.log("[generate-lesson] Lesson saved to Supabase:", lessonId);
+    console.log("[generate-lesson] Checking for assets to create...");
 
     // Automatically create and link assets from the lesson structure
     if (lessonId) {
@@ -160,9 +166,11 @@ export async function POST(req: NextRequest) {
           .insert(assetsToCreate);
         
         if (assetsError) {
-          console.error('[generate-lesson] Failed to create linked assets:', assetsError);
+          console.error("[generate-lesson] Failed to create linked assets:", assetsError);
+    console.error("[generate-lesson] Assets error details:", JSON.stringify(assetsError));
         } else {
           console.log(`[generate-lesson] Created ${assetsToCreate.length} linked assets`);
+    console.log("[generate-lesson] Lesson generation process completed.");
         }
       }
     }
@@ -177,7 +185,7 @@ export async function POST(req: NextRequest) {
       generated_at: new Date().toISOString(),
     });
   } catch (error: unknown) {
-    console.error('[generate-lesson] Error:', error);
+    console.error("[generate-lesson] Uncaught error in generate-lesson:", error);
     const message = error instanceof Error ? error.message : 'Failed to generate lesson';
     const stack = error instanceof Error ? error.stack : '';
     console.error('[generate-lesson] Stack:', stack);
