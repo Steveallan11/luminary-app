@@ -28,6 +28,6 @@ export function getOpenAIClient(): OpenAI {
   return openaiClient;
 }
 
-export const LUMI_MODEL = 'claude-sonnet-4-6';
+export const LUMI_MODEL = 'claude-opus-4-6';
 export const LUMI_MAX_TOKENS = 4096;
 export const LUMI_SUMMARY_MAX_TOKENS = 100;
