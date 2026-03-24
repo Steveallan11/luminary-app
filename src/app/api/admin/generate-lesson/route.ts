@@ -6,13 +6,21 @@ import {
   type TopicBrief,
 } from '@/lib/lesson-generator';
 
-export async function POST(req: NextRequest) {
-  try {
-    console.log("[generate-lesson] Request received");
-    console.log("[generate-lesson] Environment variables: NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL + ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY + ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY + ", OPENAI_API_KEY (present): " + !!process.env.OPENAI_API_KEY);
-    const body = await req.json();
-    console.log('[generate-lesson] Request body:', body);
+export async function generateLessonLogic(body: any, jobId: string) {
+  console.log(`[generate-lesson-logic] Function entered for job ${jobId}`);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Supabase credentials not configured for background generation');
+    return;
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  try {
+    console.log(`[generate-lesson-logic] Job ${jobId} started`);
+    console.log("[generate-lesson-logic] Environment variables: NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL + ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY + ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY + ", OPENAI_API_KEY (present): " + !!process.env.OPENAI_API_KEY);
+    
     const brief: TopicBrief = {
       topic_id: body.topic_id,
       title: body.title,
@@ -27,29 +35,19 @@ export async function POST(req: NextRequest) {
     };
 
     if (!brief.title || !brief.subject_name) {
-      return NextResponse.json(
-        { error: 'title and subject_name are required' },
-        { status: 400 }
-      );
+      console.error(`[generate-lesson-logic] Job ${jobId} failed: title and subject_name are required`);
+      await supabase.from('generation_jobs').update({ status: 'failed', error_message: 'Title and subject name are required' }).eq('id', jobId);
+      return;
     }
 
-    console.log("[generate-lesson] Brief prepared:", brief);
-    console.log("[generate-lesson] Calling generateLessonStructure...");
+    console.log(`[generate-lesson-logic] Job ${jobId} Brief prepared:`, brief);
+    console.log(`[generate-lesson-logic] Job ${jobId} Calling generateLessonStructure...`);
     const structure = await generateLessonStructure(brief);
-    console.log("[generate-lesson] Structure generated successfully");
+    console.log(`[generate-lesson-logic] Job ${jobId} Structure generated successfully`);
     const qualityScore = scoreLessonQuality(structure);
-    console.log("[generate-lesson] Quality score: " + qualityScore);
+    console.log(`[generate-lesson-logic] Job ${jobId} Quality score: ${qualityScore}`);
 
-    // Save to Supabase
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase credentials not configured');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    console.log("[generate-lesson] Supabase client created. Attempting to insert lesson structure...");
+    console.log(`[generate-lesson-logic] Job ${jobId} Supabase client created. Attempting to insert lesson structure...`);
 
     const { data, error } = await supabase
       .from('topic_lesson_structures')
@@ -70,28 +68,25 @@ export async function POST(req: NextRequest) {
         concept_card_json: structure.concept_card_json,
         realworld_json: structure.realworld_json,
         quality_score: qualityScore,
-        // We'll store estimated_minutes in the structure metadata if the column doesn't exist
-        // But let's try to insert it directly first, as it's more likely to be in this table
         estimated_minutes: brief.estimated_minutes,
       })
       .select()
       .single();
 
     if (error) {
-      console.error("[generate-lesson] Supabase insert error:", error);
-    console.error("[generate-lesson] Supabase error details:", JSON.stringify(error));
-      throw new Error(`Failed to save lesson: ${error.message}`);
+      console.error(`[generate-lesson-logic] Job ${jobId} Supabase insert error:`, error);
+      console.error(`[generate-lesson-logic] Job ${jobId} Supabase error details:`, JSON.stringify(error));
+      await supabase.from('generation_jobs').update({ status: 'failed', error_message: `Failed to save lesson: ${error.message}` }).eq('id', jobId);
+      return;
     }
 
     const lessonId = data?.id;
-    console.log("[generate-lesson] Lesson saved to Supabase:", lessonId);
-    console.log("[generate-lesson] Checking for assets to create...");
+    console.log(`[generate-lesson-logic] Job ${jobId} Lesson saved to Supabase: ${lessonId}`);
+    console.log(`[generate-lesson-logic] Job ${jobId} Checking for assets to create...`);
 
-    // Automatically create and link assets from the lesson structure
     if (lessonId) {
       const assetsToCreate = [];
 
-      // Helper to generate image in background if API key exists
       const generateImage = async (prompt: string) => {
         if (!process.env.OPENAI_API_KEY) return null;
         try {
@@ -105,12 +100,11 @@ export async function POST(req: NextRequest) {
             return data.url;
           }
         } catch (e) {
-          console.error('Background image generation failed:', e);
+          console.error(`[generate-lesson-logic] Job ${jobId} Background image generation failed:`, e);
         }
         return null;
       };
 
-      // 1. Concept Card
       if (structure.concept_card_json) {
         const conceptCard = structure.concept_card_json as any;
         const imageUrl = await generateImage(conceptCard.image_prompt || conceptCard.title);
@@ -127,7 +121,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 2. Game
       if (structure.game_content) {
         assetsToCreate.push({
           topic_id: brief.topic_id,
@@ -142,7 +135,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 3. Real-world Everyday
       if (structure.realworld_json?.everyday) {
         const everyday = structure.realworld_json.everyday as any;
         const imageUrl = await generateImage(everyday.image_prompt || everyday.title);
@@ -166,29 +158,50 @@ export async function POST(req: NextRequest) {
           .insert(assetsToCreate);
         
         if (assetsError) {
-          console.error("[generate-lesson] Failed to create linked assets:", assetsError);
-    console.error("[generate-lesson] Assets error details:", JSON.stringify(assetsError));
+          console.error(`[generate-lesson-logic] Job ${jobId} Failed to create linked assets:`, assetsError);
+          console.error(`[generate-lesson-logic] Job ${jobId} Assets error details:`, JSON.stringify(assetsError));
         } else {
-          console.log(`[generate-lesson] Created ${assetsToCreate.length} linked assets`);
-    console.log("[generate-lesson] Lesson generation process completed.");
+          console.log(`[generate-lesson-logic] Job ${jobId} Created ${assetsToCreate.length} linked assets`);
         }
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      id: data?.id,
-      structure,
-      quality_score: qualityScore,
-      status: 'pending_review',
-      brief,
-      generated_at: new Date().toISOString(),
-    });
+    await supabase.from('generation_jobs').update({
+      status: 'completed',
+      progress: 100,
+      result_id: lessonId,
+      completed_at: new Date().toISOString()
+    }).eq('id', jobId);
+    console.log(`[generate-lesson-logic] Job ${jobId} completed successfully`);
+
   } catch (error: unknown) {
-    console.error("[generate-lesson] Uncaught error in generate-lesson:", error);
+    console.error(`[generate-lesson-logic] Job ${jobId} Uncaught error in generate-lesson-logic:`, error);
     const message = error instanceof Error ? error.message : 'Failed to generate lesson';
     const stack = error instanceof Error ? error.stack : '';
-    console.error('[generate-lesson] Stack:', stack);
-    return NextResponse.json({ error: message, details: stack }, { status: 500 });
+    console.error(`[generate-lesson-logic] Job ${jobId} Stack:`, stack);
+    await supabase.from('generation_jobs').update({ status: 'failed', error_message: message }).eq('id', jobId);
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    console.log('[generate-lesson] Request received');
+    const body = await req.json();
+    const jobId = body.job_id;
+    
+    // Execute the logic in a non-blocking way and catch any unhandled rejections
+    Promise.resolve(generateLessonLogic(body, jobId)).catch(error => {
+      console.error(`[generate-lesson] Unhandled rejection from generateLessonLogic for job ${jobId}:`, error);
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Lesson generation initiated in background.',
+      job_id: jobId,
+    });
+  } catch (error: unknown) {
+    console.error('[generate-lesson] Error initiating background task:', error);
+    const message = error instanceof Error ? error.message : 'Failed to initiate lesson generation';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
