@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
     console.log("[generate-lesson] Calling generateLessonStructure...");
     const structure = await generateLessonStructure(brief);
     console.log("[generate-lesson] Structure generated successfully");
-    console.log("[generate-lesson] Quality score: " + qualityScore);
     const qualityScore = scoreLessonQuality(structure);
+    console.log("[generate-lesson] Quality score: " + qualityScore);
 
     // Save to Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
