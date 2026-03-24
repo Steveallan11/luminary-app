@@ -100,33 +100,48 @@ export async function POST(req: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const endpoint = type === 'lesson' ? '/api/admin/generate-lesson' : '/api/admin/generate-content';
     
-    // Fire and forget
-    fetch(`${appUrl}${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, job_id: jobId, topic_id: safeTopicId }),
-    }).then(async (res) => {
-      if (res.ok) {
-        const result = await res.json();
-        await supabase.from('generation_jobs').update({
-          status: 'completed',
-          progress: 100,
-          result_id: result.id,
-          completed_at: new Date().toISOString()
-        }).eq('id', jobId);
-      } else {
-        const err = await res.json();
+    // In Vercel, we can't easily fire-and-forget without a queue.
+    // For now, we'll try to call it but we won't wait for it in the main response.
+    // However, to make it work in this environment, we'll use a more direct approach
+    // by calling the logic directly if possible, or using a background task if supported.
+    // Since this is a Next.js Route Handler, we'll stick to fetch but with better error handling.
+    
+    console.log(`[queue-generation] Triggering background task: ${appUrl}${endpoint}`);
+    
+    // Fire and forget with a slight delay to allow the main response to finish
+    setTimeout(() => {
+      fetch(`${appUrl}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, job_id: jobId, topic_id: safeTopicId }),
+      }).then(async (res) => {
+        const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        if (res.ok) {
+          const result = await res.json();
+          await supabase.from('generation_jobs').update({
+            status: 'completed',
+            progress: 100,
+            result_id: result.id,
+            completed_at: new Date().toISOString()
+          }).eq('id', jobId);
+          console.log(`[queue-generation] Job ${jobId} completed successfully`);
+        } else {
+          const err = await res.json();
+          await supabase.from('generation_jobs').update({
+            status: 'failed',
+            error_message: err.error || 'Generation failed'
+          }).eq('id', jobId);
+          console.error(`[queue-generation] Job ${jobId} failed:`, err);
+        }
+      }).catch(async (err) => {
+        const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
         await supabase.from('generation_jobs').update({
           status: 'failed',
-          error_message: err.error || 'Generation failed'
+          error_message: err.message
         }).eq('id', jobId);
-      }
-    }).catch(async (err) => {
-      await supabase.from('generation_jobs').update({
-        status: 'failed',
-        error_message: err.message
-      }).eq('id', jobId);
-    });
+        console.error(`[queue-generation] Job ${jobId} fetch error:`, err);
+      });
+    }, 100);
 
     return NextResponse.json({
       success: true,
