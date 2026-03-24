@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
     console.log(`[queue-generation] Triggering background task: ${appUrl}${endpoint}`);
     
     // Fire and forget with a slight delay to allow the main response to finish
+    // Fire and forget with a slight delay to allow the main response to finish
     setTimeout(() => {
       fetch(`${appUrl}${endpoint}`, {
         method: 'POST',
