@@ -1,6 +1,7 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
 import { createClient } from '@supabase/supabase-js';
 import {
   Wand2,
@@ -711,6 +712,13 @@ export default function AdminLessonsPage() {
                         );
                       })}
                     </div>
+                  </div>
+                  {/* Knowledge Base */}
+                  <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
+                    <KnowledgeBasePanel
+                      lessonId={selectedLesson.id}
+                      topicTitle={selectedLesson.topics?.title || 'this topic'}
+                    />
                   </div>
                 </div>
               ) : (
