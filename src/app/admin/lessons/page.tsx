@@ -26,6 +26,8 @@ import {
   Plus,
   Save,
   RefreshCw,
+  Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
 import { Topic, Subject } from '@/types';
@@ -65,6 +67,10 @@ export default function AdminLessonsPage() {
   const [isApproving, setIsApproving] = useState(false);
   const [generatingContent, setGeneratingContent] = useState(false);
 
+  // Job tracking state
+  const [latestJob, setLatestJob] = useState<any | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
   // Brief editing state
   const [briefData, setBriefData] = useState<LessonBrief>({
     keyConcepts: [],
@@ -87,6 +93,31 @@ export default function AdminLessonsPage() {
     };
     fetchSubjects();
   }, []);
+
+  // Poll for latest job status
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isPolling && latestJob?.id) {
+      interval = setInterval(async () => {
+        const { data, error } = await supabase
+          .from('generation_jobs')
+          .select('*')
+          .eq('id', latestJob.id)
+          .single();
+        
+        if (!error && data) {
+          setLatestJob(data);
+          if (data.status === 'completed' || data.status === 'failed') {
+            setIsPolling(false);
+            if (data.status === 'completed') {
+              fetchLessons();
+            }
+          }
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isPolling, latestJob?.id]);
 
   const selectedSubject = useMemo(
     () => subjects.find((s) => s.id === selectedSubjectId),
@@ -184,6 +215,9 @@ export default function AdminLessonsPage() {
       });
       
       if (res.ok) {
+        const data = await res.json();
+        setLatestJob({ id: data.job_id, status: 'pending', progress: 0 });
+        setIsPolling(true);
         alert('Content generation queued! Check the Library for progress.');
       }
     } catch (err) {
@@ -287,7 +321,9 @@ export default function AdminLessonsPage() {
       });
 
       if (res.ok) {
-        alert('Lesson generation queued! You can track progress in the Library.');
+        const data = await res.json();
+        setLatestJob({ id: data.job_id, status: 'pending', progress: 0, topic_title: customTopicName });
+        setIsPolling(true);
         setActiveView('review');
         fetchLessons();
       } else {
@@ -332,173 +368,191 @@ export default function AdminLessonsPage() {
           </div>
         </div>
 
-        {activeView === 'generate' && (
-          <div className="space-y-6 max-w-2xl">
-            {/* Step 1: Topic & Subject */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 rounded-full bg-amber flex items-center justify-center text-navy font-bold">1</div>
-                <h2 className="text-xl font-bold text-white">Topic & Subject</h2>
-              </div>
+        {activeView === 'generate' ? (
+          <div className="grid grid-cols-12 gap-8">
+            {/* Left Column: Form */}
+            <div className="col-span-5 space-y-6">
+              <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Zap size={20} className="text-amber" />
+                  Topic Details
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Topic Name</label>
+                    <input
+                      type="text"
+                      value={customTopicName}
+                      onChange={(e) => setCustomTopicName(e.target.value)}
+                      placeholder="e.g. Photosynthesis, Roman Empire..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/10 focus:outline-none focus:border-amber/50 transition-all"
+                    />
+                  </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">Topic Name</label>
-                  <input
-                    type="text"
-                    value={customTopicName}
-                    onChange={(e) => setCustomTopicName(e.target.value)}
-                    placeholder="e.g. The Water Cycle"
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">Subject</label>
-                  <div className="relative">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Subject</label>
                     <select
                       value={selectedSubjectId}
                       onChange={(e) => setSelectedSubjectId(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-amber"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber/50 transition-all appearance-none"
                     >
-                      <option value="" disabled>Select a subject...</option>
+                      <option value="">Select a subject</option>
                       {subjects.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-light/40 pointer-events-none" size={18} />
                   </div>
-                </div>
 
-                <button
-                  onClick={handleAutoBrief}
-                  disabled={!customTopicName || !selectedSubjectId || generating}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-all disabled:opacity-50"
-                >
-                  {generating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-                  Auto-generate Brief
-                </button>
-              </div>
-            </div>
-
-            {/* Step 2: Age Group */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 rounded-full bg-sky-400 flex items-center justify-center text-navy font-bold">2</div>
-                <h2 className="text-xl font-bold text-white">Age Group</h2>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {AGE_GROUPS.map((group) => (
-                  <button
-                    key={group.value}
-                    onClick={() => setAgeGroup(group.value)}
-                    className={`p-4 rounded-xl border text-left transition-all ${
-                      ageGroup === group.value
-                        ? 'border-sky-400 bg-sky-400/10'
-                        : 'border-white/10 bg-white/5 hover:border-white/20'
-                    }`}
-                  >
-                    <p className={`font-bold ${ageGroup === group.value ? 'text-sky-400' : 'text-white'}`}>
-                      {group.label}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Step 3: Brief */}
-            {(customTopicName && selectedSubjectId) && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-full bg-emerald flex items-center justify-center text-navy font-bold">3</div>
-                  <h2 className="text-xl font-bold text-white">Review & Edit Brief</h2>
-                </div>
-
-                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-semibold text-white mb-2">Key Concepts (comma-separated)</label>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Age Group</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {AGE_GROUPS.map((group) => (
+                        <button
+                          key={group.value}
+                          onClick={() => setAgeGroup(group.value)}
+                          className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                            ageGroup === group.value
+                              ? 'bg-amber/20 border-amber text-amber'
+                              : 'bg-white/5 border-white/10 text-slate-light/60 hover:border-white/20'
+                          }`}
+                        >
+                          {group.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleAutoBrief}
+                    disabled={generating || !customTopicName || !selectedSubjectId}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all disabled:opacity-50"
+                  >
+                    {generating ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
+                    Auto-Generate Brief
+                  </button>
+                </div>
+              </div>
+
+              {generationError && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
+                  <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-500">{generationError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Brief Preview & Final Action */}
+            <div className="col-span-7">
+              <div className="p-6 rounded-2xl border border-white/10 bg-white/5 h-full flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Target size={20} className="text-amber" />
+                    Lesson Brief
+                  </h3>
+                  {briefEdited && (
+                    <span className="text-[10px] font-bold text-amber uppercase tracking-widest">Edited</span>
+                  )}
+                </div>
+
+                <div className="space-y-6 flex-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Key Concepts (comma separated)</label>
                     <textarea
                       value={briefData.keyConcepts.join(', ')}
                       onChange={(e) => handleBriefChange('keyConcepts', e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
-                      rows={2}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber/50 transition-all h-20 resize-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-white mb-2">Common Misconceptions (comma-separated)</label>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Common Misconceptions</label>
                     <textarea
                       value={briefData.misconceptions.join(', ')}
                       onChange={(e) => handleBriefChange('misconceptions', e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
-                      rows={2}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber/50 transition-all h-20 resize-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-white mb-2">Real-World Examples (comma-separated)</label>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Real-World Examples</label>
                     <textarea
                       value={briefData.realWorldExamples.join(', ')}
                       onChange={(e) => handleBriefChange('realWorldExamples', e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
-                      rows={2}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber/50 transition-all h-20 resize-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-white mb-2">Curriculum Objectives (one per line)</label>
+                    <label className="block text-xs font-bold text-slate-light/40 uppercase mb-2">Curriculum Objectives (one per line)</label>
                     <textarea
                       value={briefData.curriculumObjectives.join('\n')}
                       onChange={(e) => handleBriefChange('curriculumObjectives', e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
-                      rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber/50 transition-all h-32 resize-none"
                     />
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Error Message */}
-            {generationError && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 flex gap-3">
-                <AlertTriangle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-red-400">Generation Error</h3>
-                  <p className="text-sm text-red-300">{generationError}</p>
+                <div className="mt-8 pt-6 border-t border-white/10">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating || !customTopicName || briefData.keyConcepts.length === 0}
+                    className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-amber text-navy font-bold text-lg hover:bg-amber/90 transition-all disabled:opacity-50 shadow-lg shadow-amber/20"
+                  >
+                    {generating ? <Loader2 size={24} className="animate-spin" /> : <Sparkles size={24} />}
+                    Generate Full Lesson Structure
+                  </button>
+                  <p className="text-center text-[10px] text-slate-light/30 mt-3 uppercase tracking-widest">
+                    Powered by Claude 3.5 Sonnet • ~30s generation time
+                  </p>
                 </div>
               </div>
-            )}
-
-            {/* Generate Button */}
-            {(customTopicName && selectedSubjectId) && (
-              <button
-                onClick={handleGenerate}
-                disabled={generating || !briefData.keyConcepts.length}
-                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-amber hover:bg-amber/90 text-navy font-bold transition-colors disabled:opacity-50"
-              >
-                {generating ? (
-                  <>
-                    <Loader2 size={20} className="animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} />
-                    Generate Lesson
-                  </>
-                )}
-              </button>
-            )}
+            </div>
           </div>
-        )}
-
-        {/* Review Tab */}
-        {activeView === 'review' && (
-          <div className="grid grid-cols-12 gap-6">
+        ) : (
+          <div className="grid grid-cols-12 gap-8">
             {/* Lesson List */}
-            <div className="col-span-4 space-y-3">
-              <h3 className="text-sm font-bold text-slate-light/60 uppercase tracking-wider mb-4">Recent Lessons</h3>
+            <div className="col-span-4 space-y-4">
+              <h3 className="text-xs font-bold text-slate-light/40 uppercase tracking-widest mb-2">Recent Lessons</h3>
+              
+              {/* Latest Job Status Card */}
+              {latestJob && (
+                <div className={`p-4 rounded-xl border transition-all mb-4 ${
+                  latestJob.status === 'failed' ? 'border-red-500/50 bg-red-500/10' : 'border-amber/50 bg-amber/10'
+                }`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      {latestJob.status === 'completed' ? (
+                        <Check size={16} className="text-emerald" />
+                      ) : latestJob.status === 'failed' ? (
+                        <AlertCircle size={16} className="text-red-500" />
+                      ) : (
+                        <Loader2 size={16} className="text-amber animate-spin" />
+                      )}
+                      <span className="text-[10px] font-bold text-white uppercase">
+                        {latestJob.status === 'completed' ? 'Generation Complete' : 
+                         latestJob.status === 'failed' ? 'Generation Failed' : 'Generating Lesson...'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-light/40">
+                      {latestJob.progress}%
+                    </span>
+                  </div>
+                  <h4 className="text-white font-bold text-sm mb-1">{latestJob.topic_title || 'New Lesson'}</h4>
+                  {latestJob.status === 'failed' && (
+                    <p className="text-[10px] text-red-400 mt-1">{latestJob.error_message}</p>
+                  )}
+                  {latestJob.status !== 'completed' && latestJob.status !== 'failed' && (
+                    <div className="w-full bg-white/10 h-1 rounded-full mt-2 overflow-hidden">
+                      <div 
+                        className="bg-amber h-full transition-all duration-500" 
+                        style={{ width: `${latestJob.progress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {lessons.length === 0 ? (
                 <div className="p-8 text-center rounded-xl border border-white/10 bg-white/5">
                   <p className="text-sm text-slate-light/40">No lessons found</p>
