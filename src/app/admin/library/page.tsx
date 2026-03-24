@@ -151,6 +151,11 @@ export default function AdminLibraryPage() {
     fetchItems();
     fetchJobs();
 
+    // Polling as a fallback for real-time updates
+    const interval = setInterval(() => {
+      fetchJobs();
+    }, 5000);
+
     // Subscribe to generation jobs
     const channel = supabase
       .channel('generation_jobs_changes')
@@ -164,6 +169,7 @@ export default function AdminLibraryPage() {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, []);
