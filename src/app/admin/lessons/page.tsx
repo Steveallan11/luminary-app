@@ -283,9 +283,7 @@ export default function AdminLessonsPage() {
         const topicData: any = {
           title: customTopicName,
           subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
-          description: `Custom topic: ${customTopicName}`,
           slug: slug || `custom-${Date.now()}`,
-          order_index: 0,
         };
 
         // Only add estimated_minutes if we're sure it won't cause a crash, 

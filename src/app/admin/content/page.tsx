@@ -85,9 +85,7 @@ export default function AdminContentPage() {
         const topicData: any = {
           title: customTopicName,
           subject_id: customSubjectId === 'other' ? '00000000-0000-0000-0000-000000000000' : customSubjectId,
-          description: `Custom topic: ${customTopicName}`,
           slug: slug || `custom-${Date.now()}`,
-          order_index: 0,
         };
 
         const { data: newTopic, error: topicError } = await supabase
