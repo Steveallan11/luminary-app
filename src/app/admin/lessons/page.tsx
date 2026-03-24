@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   Wand2,
@@ -28,9 +28,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
-import { Topic } from '@/types';
-
-const ALL_TOPICS: Topic[] = Object.values(MOCK_TOPICS).flat();
+import { Topic, Subject } from '@/types';
 
 const AGE_GROUPS = [
   { value: '5-7', label: 'Ages 5-7 (KS1)' },
@@ -54,10 +52,9 @@ export default function AdminLessonsPage() {
   const [activeView, setActiveView] = useState<'generate' | 'queue' | 'review'>('generate');
 
   // Generation form state
-  const [selectedTopicId, setSelectedTopicId] = useState('');
   const [customTopicName, setCustomTopicName] = useState('');
-  const [customSubjectName, setCustomSubjectName] = useState('');
-  const [useCustomTopic, setUseCustomTopic] = useState(false);
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [ageGroup, setAgeGroup] = useState('8-11');
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -77,64 +74,37 @@ export default function AdminLessonsPage() {
   });
   const [briefEdited, setBriefEdited] = useState(false);
 
-  const selectedTopic = useMemo(
-    () => !useCustomTopic ? ALL_TOPICS.find((t) => t.id === selectedTopicId) : null,
-    [selectedTopicId, useCustomTopic]
-  );
+  // Fetch subjects on mount
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      const { data, error } = await supabase.from('subjects').select('*').order('name');
+      if (!error && data && data.length > 0) {
+        setSubjects(data);
+      } else {
+        // Fallback to mock subjects if DB is empty
+        setSubjects(MOCK_SUBJECTS as any);
+      }
+    };
+    fetchSubjects();
+  }, []);
 
   const selectedSubject = useMemo(
-    () => (!useCustomTopic && selectedTopic ? MOCK_SUBJECTS.find((s) => s.id === selectedTopic.subject_id) : null),
-    [selectedTopic, useCustomTopic]
+    () => subjects.find((s) => s.id === selectedSubjectId),
+    [selectedSubjectId, subjects]
   );
 
-  // Auto-generate brief when topic is selected
-  const handleTopicSelect = async (topicId: string) => {
-    setSelectedTopicId(topicId);
-    setUseCustomTopic(false);
-    const topic = ALL_TOPICS.find((t) => t.id === topicId);
-    if (!topic) return;
+  // Auto-generate brief when topic and subject are ready
+  const handleAutoBrief = async () => {
+    if (!customTopicName || !selectedSubjectId) return;
 
     setGenerating(true);
-    try {
-      const res = await fetch('/api/admin/auto-brief', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic_title: topic.title,
-          subject_name: MOCK_SUBJECTS.find((s) => s.id === topic.subject_id)?.name || 'Unknown',
-          age_group: ageGroup,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setBriefData(data.brief);
-        setBriefEdited(false);
-      }
-    } catch (error) {
-      console.error('Failed to auto-generate brief:', error);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleCustomTopicSelect = async () => {
-    if (!customTopicName || !customSubjectName) {
-      alert('Please enter both topic and subject names');
-      return;
-    }
-
-    setUseCustomTopic(true);
-    setSelectedTopicId('');
-    setGenerating(true);
-
     try {
       const res = await fetch('/api/admin/auto-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic_title: customTopicName,
-          subject_name: customSubjectName,
+          subject_name: selectedSubject?.name || 'General',
           age_group: ageGroup,
         }),
       });
@@ -224,12 +194,12 @@ export default function AdminLessonsPage() {
   };
 
   const handleGenerate = async () => {
-    if (useCustomTopic && !customTopicName) {
-      setGenerationError('Please enter a custom topic name');
+    if (!customTopicName) {
+      setGenerationError('Please enter a topic name');
       return;
     }
-    if (!useCustomTopic && !selectedTopicId) {
-      setGenerationError('Please select a topic');
+    if (!selectedSubjectId) {
+      setGenerationError('Please select a subject');
       return;
     }
 
@@ -244,7 +214,6 @@ export default function AdminLessonsPage() {
         '15-16': 'KS4',
       };
 
-      // Estimated minutes based on Key Stage
       const estimatedMinutesMap: Record<string, number> = {
         'KS1': 20,
         'KS2': 30,
@@ -252,254 +221,197 @@ export default function AdminLessonsPage() {
         'KS4': 60,
       };
 
-      const topicTitle = useCustomTopic ? customTopicName : selectedTopic?.title;
-      const subjectName = useCustomTopic ? customSubjectName : selectedSubject?.name;
-
-      // For custom topics, we need to create a topic first
-      let topicId = selectedTopicId;
       const keyStage = keyStageMap[ageGroup] || 'KS2';
       const estimatedMinutes = estimatedMinutesMap[keyStage] || 30;
 
-      // FIX: If the topicId is a mock ID (like 't9'), we need to use a real UUID for the database
-      // In a real app, we'd fetch the real ID or create it. For now, we'll use a placeholder UUID
-      // if it's not a valid UUID format.
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topicId);
-      if (!isUuid && !useCustomTopic) {
-        // This is a mock ID from mock-data.ts, we need a real UUID for the generation_jobs table
-        // We'll use a consistent placeholder for mock topics to avoid UUID errors
-        topicId = '00000000-0000-0000-0000-000000000000'; 
-      }
+      // Create or find the topic
+      let topicId = '';
+      const slug = customTopicName
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/[\s_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 
-      if (useCustomTopic) {
-        // Create a temporary topic in Supabase
-        const slug = customTopicName
-          .toLowerCase()
-          .trim()
-          .replace(/[^\w\s-]/g, '')
-          .replace(/[\s_-]+/g, '-')
-          .replace(/^-+|-+$/g, '');
+      try {
+        // Try to create the topic
+        const { data: newTopic, error: topicError } = await supabase
+          .from('topics')
+          .insert({
+            title: customTopicName,
+            subject_id: selectedSubjectId,
+            slug: slug || `custom-${Date.now()}`,
+          })
+          .select()
+          .single();
 
-        const topicData: any = {
-          title: customTopicName,
-          subject_id: '00000000-0000-0000-0000-000000000000', // Placeholder
-          slug: slug || `custom-${Date.now()}`,
-        };
-
-        try {
-          const { data: newTopic, error: topicError } = await supabase
+        if (topicError || !newTopic) {
+          console.warn('Topic creation failed, using fallback logic:', topicError);
+          // Fallback: try to find an existing topic with this title and subject
+          const { data: existingTopic } = await supabase
             .from('topics')
-            .insert(topicData)
-            .select()
+            .select('id')
+            .eq('title', customTopicName)
+            .eq('subject_id', selectedSubjectId)
             .single();
-
-          if (topicError || !newTopic) {
-            console.warn('Supabase topic creation failed, attempting to create a General subject and topic as fallback:', topicError);
-            
-            // 1. Try to find or create a "General" subject
-            let { data: generalSubject } = await supabase.from('subjects').select('id').eq('name', 'General').single();
-            if (!generalSubject) {
-              const { data: createdSubject } = await supabase.from('subjects').insert({ 
-                name: 'General', 
-                slug: 'general',
-                color: '#64748b' 
-              }).select().single();
-              generalSubject = createdSubject;
-            }
-
-            // 2. Try to create a "General" topic under that subject
-            if (generalSubject) {
-              const { data: createdTopic } = await supabase.from('topics').insert({
-                title: customTopicName || 'General Topic',
-                subject_id: generalSubject.id,
-                slug: `general-${Date.now()}`
-              }).select().single();
-              
-              if (createdTopic) {
-                topicId = createdTopic.id;
-              } else {
-                // Last resort: fetch ANY topic
-                const { data: anyTopic } = await supabase.from('topics').select('id').limit(1).single();
-                if (!anyTopic) throw new Error('Database is empty. Please create a subject and topic in Supabase first.');
-                topicId = anyTopic.id;
-              }
-            } else {
-              throw new Error('Failed to create fallback subject.');
-            }
+          
+          if (existingTopic) {
+            topicId = existingTopic.id;
           } else {
-            topicId = newTopic.id;
+            // Last resort: fetch ANY topic to satisfy constraints
+            const { data: anyTopic } = await supabase.from('topics').select('id').limit(1).single();
+            if (!anyTopic) throw new Error('No topics found in database. Please ensure subjects are seeded.');
+            topicId = anyTopic.id;
           }
-        } catch (e) {
-          console.error('Exception during topic creation:', e);
-          const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
-          if (!fallbackTopic) {
-            throw new Error('No topics found in database to use as fallback.');
-          }
-          topicId = fallbackTopic.id;
+        } else {
+          topicId = newTopic.id;
         }
+      } catch (e) {
+        console.error('Exception during topic handling:', e);
+        const { data: anyTopic } = await supabase.from('topics').select('id').limit(1).single();
+        if (!anyTopic) throw new Error('No topics found in database.');
+        topicId = anyTopic.id;
       }
 
-      // Queue the generation job in the background
+      // Queue the generation job
       const res = await fetch('/api/admin/queue-generation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'lesson',
           topic_id: topicId,
-          title: topicTitle,
-          subject_name: subjectName,
+          title: customTopicName,
+          subject_name: selectedSubject?.name || 'General',
           key_stage: keyStage,
           age_group: ageGroup,
           estimated_minutes: estimatedMinutes,
-          brief: {
-            key_concepts: briefData.keyConcepts,
-            common_misconceptions: briefData.misconceptions,
-            real_world_examples: briefData.realWorldExamples,
-            curriculum_objectives: briefData.curriculumObjectives,
-          },
+          brief: briefData,
         }),
       });
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || error.details || `Queuing failed: ${res.status}`);
+      if (res.ok) {
+        alert('Lesson generation queued! You can track progress in the Library.');
+        setActiveView('review');
+        fetchLessons();
+      } else {
+        const err = await res.json();
+        setGenerationError(err.error || 'Failed to queue generation');
       }
-
-      const result = await res.json();
-      setGenerationError(null);
-      alert(`Lesson generation queued! Job ID: ${result.job_id}\n\nYou can now switch screens. Check the Library page to see when it's ready.`);
-      setActiveView('review');
-      fetchLessons();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Generation failed';
-      console.error('Generation error:', message);
-      setGenerationError(message);
+    } catch (err: any) {
+      setGenerationError(err.message || 'An unexpected error occurred');
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy via-navy/95 to-navy/90 p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-black text-white mb-2">Generate Lessons</h1>
-          <p className="text-slate-light/60">Create full 7-phase lessons with AI in just a few steps</p>
+    <div className="min-h-screen bg-navy p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">Lesson Generation</h1>
+            <p className="text-slate-light/60">Create and review high-quality, curriculum-aligned lessons.</p>
+          </div>
+          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => setActiveView('generate')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                activeView === 'generate' ? 'bg-amber text-navy' : 'text-white hover:bg-white/5'
+              }`}
+            >
+              Generate
+            </button>
+            <button
+              onClick={() => {
+                setActiveView('review');
+                fetchLessons();
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                activeView === 'review' ? 'bg-amber text-navy' : 'text-white hover:bg-white/5'
+              }`}
+            >
+              Review & Approve
+            </button>
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-white/10">
-          <button
-            onClick={() => setActiveView('generate')}
-            className={`px-4 py-3 font-semibold transition-colors ${
-              activeView === 'generate'
-                ? 'text-amber border-b-2 border-amber'
-                : 'text-slate-light/60 hover:text-white'
-            }`}
-          >
-            Generate
-          </button>
-          <button
-            onClick={() => {
-              setActiveView('review');
-              fetchLessons();
-            }}
-            className={`px-4 py-3 font-semibold transition-colors ${
-              activeView === 'review'
-                ? 'text-amber border-b-2 border-amber'
-                : 'text-slate-light/60 hover:text-white'
-            }`}
-          >
-            Review & Approve
-          </button>
-        </div>
-
-        {/* Generate Tab */}
         {activeView === 'generate' && (
-          <div className="space-y-8">
-            {/* Step 1: Choose Topic */}
+          <div className="space-y-6 max-w-2xl">
+            {/* Step 1: Topic & Subject */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 rounded-full bg-amber flex items-center justify-center text-navy font-bold">1</div>
-                <h2 className="text-xl font-bold text-white">Choose a Topic</h2>
+                <h2 className="text-xl font-bold text-white">Topic & Subject</h2>
               </div>
 
               <div className="space-y-4">
-                {/* Existing Topics */}
                 <div>
-                  <label className="block text-sm font-semibold text-white mb-2">Select from Curriculum</label>
-                  <select
-                    value={useCustomTopic ? '' : selectedTopicId}
-                    onChange={(e) => handleTopicSelect(e.target.value)}
-                    disabled={useCustomTopic}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber disabled:opacity-50"
-                  >
-                    <option value="">Choose a topic...</option>
-                    {ALL_TOPICS.map((topic) => (
-                      <option key={topic.id} value={topic.id}>
-                        {topic.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* OR Divider */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-white/10"></div>
-                  <span className="text-xs text-slate-light/60 font-semibold">OR</span>
-                  <div className="flex-1 h-px bg-white/10"></div>
-                </div>
-
-                {/* Custom Topic */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-semibold text-white">Create Custom Topic</label>
+                  <label className="block text-sm font-semibold text-white mb-2">Topic Name</label>
                   <input
                     type="text"
-                    placeholder="Topic name (e.g., 'The Water Cycle')"
                     value={customTopicName}
                     onChange={(e) => setCustomTopicName(e.target.value)}
+                    placeholder="e.g. The Water Cycle"
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
                   />
-                  <input
-                    type="text"
-                    placeholder="Subject (e.g., 'Science')"
-                    value={customSubjectName}
-                    onChange={(e) => setCustomSubjectName(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-slate-light/40 focus:outline-none focus:ring-2 focus:ring-amber"
-                  />
-                  <button
-                    onClick={handleCustomTopicSelect}
-                    disabled={generating || !customTopicName || !customSubjectName}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors disabled:opacity-50"
-                  >
-                    {generating ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                    Use Custom Topic
-                  </button>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">Subject</label>
+                  <div className="relative">
+                    <select
+                      value={selectedSubjectId}
+                      onChange={(e) => setSelectedSubjectId(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-amber"
+                    >
+                      <option value="" disabled>Select a subject...</option>
+                      {subjects.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-light/40 pointer-events-none" size={18} />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAutoBrief}
+                  disabled={!customTopicName || !selectedSubjectId || generating}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-all disabled:opacity-50"
+                >
+                  {generating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                  Auto-generate Brief
+                </button>
               </div>
             </div>
 
             {/* Step 2: Age Group */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-full bg-sky flex items-center justify-center text-navy font-bold">2</div>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 rounded-full bg-sky-400 flex items-center justify-center text-navy font-bold">2</div>
                 <h2 className="text-xl font-bold text-white">Age Group</h2>
               </div>
-              <select
-                value={ageGroup}
-                onChange={(e) => setAgeGroup(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber"
-              >
-                {AGE_GROUPS.map((ag) => (
-                  <option key={ag.value} value={ag.value}>
-                    {ag.label}
-                  </option>
+
+              <div className="grid grid-cols-2 gap-3">
+                {AGE_GROUPS.map((group) => (
+                  <button
+                    key={group.value}
+                    onClick={() => setAgeGroup(group.value)}
+                    className={`p-4 rounded-xl border text-left transition-all ${
+                      ageGroup === group.value
+                        ? 'border-sky-400 bg-sky-400/10'
+                        : 'border-white/10 bg-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    <p className={`font-bold ${ageGroup === group.value ? 'text-sky-400' : 'text-white'}`}>
+                      {group.label}
+                    </p>
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
-            {/* Step 3: Review Brief */}
-            {(selectedTopicId || useCustomTopic) && (
+            {/* Step 3: Brief */}
+            {(customTopicName && selectedSubjectId) && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-8 h-8 rounded-full bg-emerald flex items-center justify-center text-navy font-bold">3</div>
@@ -507,7 +419,6 @@ export default function AdminLessonsPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Key Concepts */}
                   <div>
                     <label className="block text-sm font-semibold text-white mb-2">Key Concepts (comma-separated)</label>
                     <textarea
@@ -518,7 +429,6 @@ export default function AdminLessonsPage() {
                     />
                   </div>
 
-                  {/* Misconceptions */}
                   <div>
                     <label className="block text-sm font-semibold text-white mb-2">Common Misconceptions (comma-separated)</label>
                     <textarea
@@ -529,7 +439,6 @@ export default function AdminLessonsPage() {
                     />
                   </div>
 
-                  {/* Real-World Examples */}
                   <div>
                     <label className="block text-sm font-semibold text-white mb-2">Real-World Examples (comma-separated)</label>
                     <textarea
@@ -540,7 +449,6 @@ export default function AdminLessonsPage() {
                     />
                   </div>
 
-                  {/* Curriculum Objectives */}
                   <div>
                     <label className="block text-sm font-semibold text-white mb-2">Curriculum Objectives (one per line)</label>
                     <textarea
@@ -566,7 +474,7 @@ export default function AdminLessonsPage() {
             )}
 
             {/* Generate Button */}
-            {(selectedTopicId || useCustomTopic) && (
+            {(customTopicName && selectedSubjectId) && (
               <button
                 onClick={handleGenerate}
                 disabled={generating || !briefData.keyConcepts.length}
