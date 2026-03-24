@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import { generateLessonLogic } from '../generate-lesson/route'; // Import the logic
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,11 +53,10 @@ export async function POST(req: NextRequest) {
 
       if (!safeTopicId || safeTopicId === '00000000-0000-0000-0000-000000000000') {
         const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
-        if (fallbackTopic) {
-          safeTopicId = fallbackTopic.id;
-        } else {
-          throw new Error('Database is empty and failed to create a fallback topic.');
+        if (!fallbackTopic) {
+          throw new Error('No topics found in database to use as fallback.');
         }
+        safeTopicId = fallbackTopic.id;
       }
     } else {
       const { data: topicExists } = await supabase
@@ -96,23 +96,16 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to queue generation: ${error.message}`);
     }
 
-    // Trigger background generation
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-    console.log(`[queue-generation] NEXT_PUBLIC_APP_URL: ${process.env.NEXT_PUBLIC_APP_URL}`);
-    console.log(`[queue-generation] Resolved appUrl: ${appUrl}`);
-    const endpoint = type === 'lesson' ? '/api/admin/generate-lesson' : '/api/admin/generate-content';
-    
-    // In Vercel, we can't easily fire-and-forget without a queue.
-    // For now, we'll try to call it but we won't wait for it in the main response.
-    // However, to make it work in this environment, we'll use a more direct approach
-    // by calling the logic directly if possible, or using a background task if supported.
-    // Since this is a Next.js Route Handler, we'll stick to fetch but with better error handling.
-    
-    console.log(`[queue-generation] Triggering background task: ${appUrl}${endpoint}`);
-    
-    // Fire and forget with a slight delay to allow the main response to finish
-    // Fire and forget with a slight delay to allow the main response to finish
-    setTimeout(() => {
+    // Directly invoke the lesson generation logic in a non-blocking way
+    if (type === 'lesson') {
+      console.log(`[queue-generation] Directly invoking generateLessonLogic for job ${jobId}`);
+      generateLessonLogic({ ...body, topic_id: safeTopicId }, jobId);
+    } else if (type === 'content') {
+      // For content generation, we might need a similar direct invocation or a dedicated background function
+      // For now, keep the fetch for content generation if it was working or needs separate handling
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+      const endpoint = '/api/admin/generate-content';
+      console.log(`[queue-generation] Triggering background content task: ${appUrl}${endpoint}`);
       fetch(`${appUrl}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,14 +120,14 @@ export async function POST(req: NextRequest) {
             result_id: result.id,
             completed_at: new Date().toISOString()
           }).eq('id', jobId);
-          console.log(`[queue-generation] Job ${jobId} completed successfully`);
+          console.log(`[queue-generation] Job ${jobId} content generation completed successfully`);
         } else {
           const err = await res.json();
           await supabase.from('generation_jobs').update({
             status: 'failed',
-            error_message: err.error || 'Generation failed'
+            error_message: err.error || 'Content generation failed'
           }).eq('id', jobId);
-          console.error(`[queue-generation] Job ${jobId} failed:`, err);
+          console.error(`[queue-generation] Job ${jobId} content generation failed:`, err);
         }
       }).catch(async (err) => {
         const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -142,9 +135,9 @@ export async function POST(req: NextRequest) {
           status: 'failed',
           error_message: err.message
         }).eq('id', jobId);
-        console.error(`[queue-generation] Job ${jobId} fetch error:`, err);
+        console.error(`[queue-generation] Job ${jobId} content generation fetch error:`, err);
       });
-    }, 100);
+    }
 
     return NextResponse.json({
       success: true,
