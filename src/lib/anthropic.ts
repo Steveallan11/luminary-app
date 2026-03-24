@@ -7,10 +7,11 @@ let openaiClient: OpenAI | null = null;
 export function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey === 'placeholder-anthropic-key') {
+    if (!apiKey) {
       // If no Anthropic key, we'll return a proxy or throw
       // For now, we'll throw to let the caller handle the fallback
-      throw new Error('ANTHROPIC_API_KEY is not configured.');
+      console.error('ANTHROPIC_API_KEY is not configured.');
+      throw new Error('ANTHROPIC_API_KEY is not configured. Please ensure it is set in your environment variables.');
     }
     anthropicClient = new Anthropic({ apiKey });
   }
