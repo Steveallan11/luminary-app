@@ -161,17 +161,22 @@ export async function generateLessonStructure(
   let text = '';
   
   const client = getAnthropicClient();
-  const response = await client.messages.create({
-    model: LUMI_MODEL,
-    max_tokens: 4096,
-    messages: [
-      {
-        role: 'user',
-        content: buildGenerationPrompt(brief),
-      },
-    ],
-  });
-  text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+  try {
+    const response = await client.messages.create({
+      model: LUMI_MODEL,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: buildGenerationPrompt(brief),
+        },
+      ],
+    });
+    text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+  } catch (apiError) {
+    console.error(`[lesson-generator] Anthropic API call failed: ${apiError instanceof Error ? apiError.message : 'Unknown API error'}`);
+    throw new Error(`Anthropic API call failed: ${apiError instanceof Error ? apiError.message : 'Unknown API error'}`);
+  }
 
   // Strip any markdown code fences if present
   console.log(`[lesson-generator] Raw Claude response text: ${text.substring(0, 500)}...`); // Log first 500 chars
