@@ -5,7 +5,7 @@
  * structure using Claude. This is the core of the pre-generation pipeline.
  */
 
-import { getAnthropicClient, LUMI_MODEL } from '@/lib/anthropic';
+import { getAnthropicClient, getOpenAIClient, LUMI_MODEL } from '@/lib/anthropic';
 
 export interface TopicBrief {
   topic_id: string;
@@ -158,20 +158,40 @@ IMPORTANT:
 export async function generateLessonStructure(
   brief: TopicBrief
 ): Promise<GeneratedLessonStructure> {
-  const client = getAnthropicClient();
-
-  const response = await client.messages.create({
-    model: LUMI_MODEL,
-    max_tokens: 4096,
-    messages: [
-      {
-        role: 'user',
-        content: buildGenerationPrompt(brief),
-      },
-    ],
-  });
-
-  const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+  let text = '';
+  
+  try {
+    const client = getAnthropicClient();
+    const response = await client.messages.create({
+      model: LUMI_MODEL,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: buildGenerationPrompt(brief),
+        },
+      ],
+    });
+    text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+  } catch (err) {
+    console.warn('[lesson-generator] Claude failed, falling back to OpenAI:', err);
+    const client = getOpenAIClient();
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a curriculum designer for Luminary, a UK homeschooling platform. Return ONLY valid JSON.',
+        },
+        {
+          role: 'user',
+          content: buildGenerationPrompt(brief),
+        },
+      ],
+      response_format: { type: 'json_object' },
+    });
+    text = response.choices[0]?.message?.content || '';
+  }
 
   // Strip any markdown code fences if present
   const cleaned = text
