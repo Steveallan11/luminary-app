@@ -1,6 +1,6 @@
 'use client';
-
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import {
   Wand2,
@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Clock,
   AlertCircle,
+  FlaskConical,
 } from 'lucide-react';
 import { MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
 import { Topic, Subject } from '@/types';
@@ -606,7 +607,14 @@ export default function AdminLessonsPage() {
                           {selectedLesson.topics?.subjects?.name} • {selectedLesson.key_stage} • Age {selectedLesson.age_group}
                         </p>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 flex-wrap">
+                        <button
+                          onClick={() => window.open(`/admin/test-lesson/${selectedLesson.id}`, '_blank')}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 font-bold text-sm hover:bg-purple-500/30 transition-colors"
+                        >
+                          <FlaskConical size={16} />
+                          Test with Lumi
+                        </button>
                         {selectedLesson.status !== 'live' && (
                           <button
                             onClick={() => handleApprove(selectedLesson.id)}

@@ -31,6 +31,9 @@ interface ChatRequest {
   mastery_score?: number;
   current_phase?: LessonPhase;
   prior_knowledge?: string;
+  // Admin test mode
+  admin_mode?: boolean;
+  admin_system_prompt?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -45,36 +48,48 @@ export async function POST(request: NextRequest) {
       session_id,
       current_phase,
       prior_knowledge,
+      admin_mode,
+      admin_system_prompt,
     } = body;
 
-    const child = MOCK_CHILD;
-    const subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug);
-    const topic = findTopicBySlug(subject_slug, topic_slug);
+    let systemPrompt: string;
+    let activePhase: LessonPhase;
 
-    if (!subject || !topic) {
-      return new Response(JSON.stringify({ error: 'Subject or topic not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
+    if (admin_mode && admin_system_prompt) {
+      // Admin test mode: use the provided system prompt directly, skip mock data lookup
+      systemPrompt = admin_system_prompt;
+      activePhase = current_phase ?? 'spark';
+    } else {
+      // Normal child mode: use mock data and generate standard Lumi prompt
+      const child = MOCK_CHILD;
+      const subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug);
+      const topic = findTopicBySlug(subject_slug, topic_slug);
+
+      if (!subject || !topic) {
+        return new Response(JSON.stringify({ error: 'Subject or topic not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const phaseTracking = getMockPhaseTracking(session_id);
+      activePhase = current_phase ?? phaseTracking.current_phase;
+      const structure = getLessonStructureForTopic(topic.id, child.age);
+      const contentManifest = buildContentManifest(topic.id);
+
+      systemPrompt = generateLumiSystemPrompt({
+        child_name: child.name,
+        child_age: child.age,
+        subject_name: subject.name,
+        topic_title: topic.title,
+        topic_description: topic.description,
+        previous_struggles: prior_knowledge ? [prior_knowledge] : [],
+        mastery_score: mastery_score ?? 0,
+        content_manifest: contentManifest,
+        structure,
+        current_phase: activePhase,
       });
     }
-
-    const phaseTracking = getMockPhaseTracking(session_id);
-    const activePhase = current_phase ?? phaseTracking.current_phase;
-    const structure = getLessonStructureForTopic(topic.id, child.age);
-    const contentManifest = buildContentManifest(topic.id);
-
-    const systemPrompt = generateLumiSystemPrompt({
-      child_name: child.name,
-      child_age: child.age,
-      subject_name: subject.name,
-      topic_title: topic.title,
-      topic_description: topic.description,
-      previous_struggles: prior_knowledge ? [prior_knowledge] : [],
-      mastery_score: mastery_score ?? 0,
-      content_manifest: contentManifest,
-      structure,
-      current_phase: activePhase,
-    });
 
     const claudeMessages: ChatMessage[] = messages.map((m) => ({
       role: m.role,
