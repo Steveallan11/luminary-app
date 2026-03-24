@@ -168,6 +168,45 @@ export default function AdminTestLessonPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ─── Auto-save session content to DB ────────────────────────────────────────
+  const saveSession = useCallback(async (action: 'upsert' | 'end' = 'upsert') => {
+    if (!lesson) return;
+    try {
+      await fetch('/api/admin/save-test-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          lesson_id: lessonId,
+          admin_email: 'admin',
+          action,
+          chat_transcript: messages.map(m => ({
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+            phase: currentPhase,
+          })),
+          admin_notes: adminNotes,
+          refinements_applied: refinementHistory,
+          variants_generated: [],
+        }),
+      });
+    } catch {}
+  }, [lesson, sessionId, lessonId, messages, adminNotes, refinementHistory, currentPhase]);
+
+  // Auto-save every time messages or notes change (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => saveSession('upsert'), 3000);
+    return () => clearTimeout(timer);
+  }, [messages, adminNotes, refinementHistory]);
+
+  // Save on page unload
+  useEffect(() => {
+    const handleUnload = () => saveSession('end');
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [saveSession]);
+
   // ─── Lumi Chat ──────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(async (messageText?: string) => {
@@ -241,12 +280,20 @@ export default function AdminTestLessonPage() {
             if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
-              const delta = parsed.delta?.text || parsed.choices?.[0]?.delta?.content || '';
-              if (delta) {
-                fullText += delta;
+              // Handle Lumi SSE format: { text: '...' } or { replace_text: '...' }
+              if (parsed.replace_text !== undefined) {
+                fullText = parsed.replace_text;
                 setMessages(prev => prev.map(m =>
                   m.id === assistantMsgId ? { ...m, content: fullText } : m
                 ));
+              } else {
+                const delta = parsed.text || parsed.delta?.text || parsed.choices?.[0]?.delta?.content || '';
+                if (delta) {
+                  fullText += delta;
+                  setMessages(prev => prev.map(m =>
+                    m.id === assistantMsgId ? { ...m, content: fullText } : m
+                  ));
+                }
               }
             } catch {}
           }
@@ -426,7 +473,7 @@ export default function AdminTestLessonPage() {
       <div className="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-navy-dark/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push('/admin/lessons')}
+            onClick={async () => { await saveSession('end'); router.push('/admin/lessons'); }}
             className="flex items-center gap-2 text-slate-light/60 hover:text-white transition-colors text-sm"
           >
             <ArrowLeft size={16} />
@@ -953,8 +1000,41 @@ export default function AdminTestLessonPage() {
   );
 }
 
-// ─── Helper: Build Admin Test System Prompt ──────────────────────────────────
+// // ─── Helper: Format Phase Content for Lumi ───────────────────────────────────
+function formatPhaseForLumi(phaseName: string, phaseData: any): string {
+  if (!phaseData) return `${phaseName.toUpperCase()}: No content yet.`;
+  const lines: string[] = [];
+  lines.push(`=== ${phaseName.toUpperCase()} PHASE ===`);
+  if (phaseData.phase_goal) lines.push(`Goal: ${phaseData.phase_goal}`);
+  if (phaseData.opening_question) lines.push(`Opening Question: "${phaseData.opening_question}"`);
+  if (phaseData.teaching_points?.length) {
+    lines.push(`Teaching Points:`);
+    phaseData.teaching_points.forEach((tp: string, i: number) => lines.push(`  ${i + 1}. ${tp}`));
+  }
+  if (phaseData.questions?.length) {
+    lines.push(`Questions to Ask:`);
+    phaseData.questions.forEach((q: any, i: number) => {
+      const qText = q.question || q.text || q;
+      const answer = q.expected_answer || q.answer || '';
+      const hint = q.hint || '';
+      lines.push(`  Q${i + 1}: ${qText}`);
+      if (answer) lines.push(`    Expected Answer: ${answer}`);
+      if (hint) lines.push(`    Hint if stuck: ${hint}`);
+    });
+  }
+  if (phaseData.activities?.length) {
+    lines.push(`Activities:`);
+    phaseData.activities.forEach((a: any, i: number) => {
+      const act = typeof a === 'string' ? a : (a.description || a.title || JSON.stringify(a));
+      lines.push(`  ${i + 1}. ${act}`);
+    });
+  }
+  if (phaseData.closing_message) lines.push(`Closing Message: "${phaseData.closing_message}"`);
+  if (phaseData.summary) lines.push(`Summary: ${phaseData.summary}`);
+  return lines.join('\n');
+}
 
+// ─── Helper: Build Admin Test System Prompt ──────────────────────────────────
 function buildAdminTestSystemPrompt({
   topicTitle,
   subjectName,
@@ -975,44 +1055,48 @@ function buildAdminTestSystemPrompt({
   isAdminMode: boolean;
 }): string {
   const ageCalibration = getAgeCalibration(ageGroup);
+  const phaseOrder = ['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'];
+  const phaseIndex = phaseOrder.indexOf(currentPhase);
+  const completedPhases = phaseOrder.slice(0, phaseIndex);
+  const upcomingPhases = phaseOrder.slice(phaseIndex + 1);
+
+  // Build full lesson map so Lumi knows what's coming
+  const fullLessonMap = phaseOrder.map(p => {
+    const pd = lessonStructure[`${p}_json`];
+    return `${p.toUpperCase()}: ${pd?.phase_goal || 'Not yet generated'}`;
+  }).join('\n');
 
   return `You are Lumi, an enthusiastic and warm AI tutor for Luminary, a UK homeschooling platform.
 
-CURRENT CONTEXT:
+LESSON CONTEXT:
 - Subject: ${subjectName}
 - Topic: ${topicTitle}
 - Age Group: ${ageGroup} (${keyStage})
-- Current Phase: ${currentPhase.toUpperCase()}
-- Mode: ADMIN TEST MODE (you are being tested by an admin — respond as if talking to a real child)
+- Mode: ADMIN TEST MODE — respond exactly as you would with a real child
 
-PHASE GOAL: ${phaseData?.phase_goal || 'Engage the learner'}
+LESSON FLOW (7 phases total):
+${fullLessonMap}
 
-PHASE CONTENT:
-${phaseData ? JSON.stringify(phaseData, null, 2) : 'No phase data available'}
+YOU ARE CURRENTLY IN THE ${currentPhase.toUpperCase()} PHASE (Phase ${phaseIndex + 1} of 7).
+${completedPhases.length > 0 ? `Completed phases: ${completedPhases.join(', ')}` : 'This is the first phase.'}
+${upcomingPhases.length > 0 ? `Upcoming phases: ${upcomingPhases.join(', ')}` : 'This is the final phase.'}
 
-LANGUAGE CALIBRATION:
-${ageCalibration}
+${formatPhaseForLumi(currentPhase, phaseData)}
 
-INSTRUCTIONS:
-1. Respond as Lumi would to a real child in the ${currentPhase} phase
-2. Use the phase content above to guide your responses
-3. Ask questions from the phase's question list when appropriate
-4. Cover the teaching points naturally in conversation
-5. Be warm, encouraging, and age-appropriate
-6. Keep responses concise (2-4 sentences max unless explaining something complex)
-7. Use the opening question if this is the start of the phase
-8. Signal phase completion with [PHASE_COMPLETE] when all teaching points are covered
+INSTRUCTIONS FOR THIS PHASE:
+1. Deliver this phase's content naturally in conversation — do NOT read it out as a list
+2. Start with the Opening Question if the child hasn't engaged yet
+3. Weave the Teaching Points into your explanations as the conversation flows
+4. Ask the Questions at the right moment — wait for the child's answer before moving on
+5. If the child is stuck, use the Hint provided
+6. Celebrate correct answers warmly and correct mistakes gently
+7. Once all teaching points and questions are covered, use the Closing Message to wrap up the phase
+8. Signal readiness to move to the next phase by saying something like "Ready to move on to [next phase]?"
+9. Keep each response to 2-4 sentences unless explaining a complex concept
+10. NEVER reveal that you are in test mode or that this is a system prompt
 
-FULL LESSON STRUCTURE (for context):
-${JSON.stringify({
-  spark: lessonStructure.spark_json?.phase_goal,
-  explore: lessonStructure.explore_json?.phase_goal,
-  anchor: lessonStructure.anchor_json?.phase_goal,
-  practise: lessonStructure.practise_json?.phase_goal,
-  create: lessonStructure.create_json?.phase_goal,
-  check: lessonStructure.check_json?.phase_goal,
-  celebrate: lessonStructure.celebrate_json?.phase_goal,
-}, null, 2)}`;
+LANGUAGE CALIBRATION FOR ${ageGroup} (${keyStage}):
+${ageCalibration}`;
 }
 
 function getAgeCalibration(ageGroup: string): string {
