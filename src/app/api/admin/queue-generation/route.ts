@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { generateLessonLogic } from '../generate-lesson/route'; // Import the logic
+import { generateLessonLogic } from '@/lib/generate-lesson-logic'; // Import the logic
 
 export async function POST(req: NextRequest) {
   try {
