@@ -293,13 +293,38 @@ export default function AdminLessonsPage() {
             .single();
 
           if (topicError || !newTopic) {
-            console.warn('Supabase topic creation failed, fetching a real fallback ID from database:', topicError);
-            // Fetch the first available topic to use as a fallback ID to satisfy NOT NULL and FOREIGN KEY constraints
-            const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
-            if (!fallbackTopic) {
-              throw new Error('No topics found in database to use as fallback. Please create at least one topic first.');
+            console.warn('Supabase topic creation failed, attempting to create a General subject and topic as fallback:', topicError);
+            
+            // 1. Try to find or create a "General" subject
+            let { data: generalSubject } = await supabase.from('subjects').select('id').eq('name', 'General').single();
+            if (!generalSubject) {
+              const { data: createdSubject } = await supabase.from('subjects').insert({ 
+                name: 'General', 
+                slug: 'general',
+                color: '#64748b' 
+              }).select().single();
+              generalSubject = createdSubject;
             }
-            topicId = fallbackTopic.id;
+
+            // 2. Try to create a "General" topic under that subject
+            if (generalSubject) {
+              const { data: createdTopic } = await supabase.from('topics').insert({
+                title: customTopicName || 'General Topic',
+                subject_id: generalSubject.id,
+                slug: `general-${Date.now()}`
+              }).select().single();
+              
+              if (createdTopic) {
+                topicId = createdTopic.id;
+              } else {
+                // Last resort: fetch ANY topic
+                const { data: anyTopic } = await supabase.from('topics').select('id').limit(1).single();
+                if (!anyTopic) throw new Error('Database is empty. Please create a subject and topic in Supabase first.');
+                topicId = anyTopic.id;
+              }
+            } else {
+              throw new Error('Failed to create fallback subject.');
+            }
           } else {
             topicId = newTopic.id;
           }

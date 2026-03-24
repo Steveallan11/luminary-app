@@ -38,9 +38,34 @@ export async function POST(req: NextRequest) {
     
     if (!isUuid || topic_id === '00000000-0000-0000-0000-000000000000') {
       // If not a valid UUID, we need a real fallback to satisfy NOT NULL and FOREIGN KEY constraints
-      const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+      let { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+      
       if (!fallbackTopic) {
-        throw new Error('No topics found in database to use as fallback. Please create at least one topic first.');
+        console.warn('[queue-generation] Database empty, creating General fallback');
+        // Create General subject
+        let { data: generalSubject } = await supabase.from('subjects').select('id').eq('name', 'General').single();
+        if (!generalSubject) {
+          const { data: createdSubject } = await supabase.from('subjects').insert({ 
+            name: 'General', 
+            slug: 'general',
+            color: '#64748b' 
+          }).select().single();
+          generalSubject = createdSubject;
+        }
+        
+        // Create General topic
+        if (generalSubject) {
+          const { data: createdTopic } = await supabase.from('topics').insert({
+            title: title || 'General Topic',
+            subject_id: generalSubject.id,
+            slug: `general-${Date.now()}`
+          }).select().single();
+          fallbackTopic = createdTopic;
+        }
+      }
+      
+      if (!fallbackTopic) {
+        throw new Error('No topics found in database and failed to create fallback.');
       }
       safeTopicId = fallbackTopic.id;
     } else {
