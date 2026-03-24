@@ -1,119 +1,131 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_SUBJECTS, MOCK_TOPICS } from '@/lib/mock-data';
-import { AssetType, TopicAsset, Topic, AgeGroup } from '@/types';
+import { createClient } from '@supabase/supabase-js';
 
-const ALL_TOPICS: Topic[] = Object.values(MOCK_TOPICS).flat();
+// Extend Vercel function timeout to 300 seconds for Claude API calls
+export const maxDuration = 300;
+
+type AssetType = 'concept_card' | 'realworld_card' | 'game_questions' | 'worksheet' | 'check_questions';
 
 /**
  * POST /api/admin/generate-content
- * 
- * Accepts: { topic_id, asset_types[], age_group }
+ *
+ * Accepts: { topic_id, asset_types[], age_group, key_stage?, linked_lesson_id?, title?, subject_name? }
  * Uses Claude to generate content for each requested asset type.
- * Returns: { assets: TopicAsset[] }
+ * Saves generated assets to topic_assets table in Supabase.
+ * Returns: { assets: [], message }
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { topic_id, asset_types, age_group = '8-11' as AgeGroup } = body as {
-      topic_id: string;
-      asset_types: AssetType[];
-      age_group: AgeGroup;
-    };
+    const {
+      topic_id,
+      asset_types,
+      age_group = '8-11',
+      key_stage = 'KS2',
+      linked_lesson_id = null,
+      title: bodyTitle,
+      subject_name: bodySubjectName,
+    } = body;
 
     if (!topic_id || !asset_types || asset_types.length === 0) {
       return NextResponse.json({ error: 'topic_id and asset_types are required' }, { status: 400 });
     }
 
-    const topic = ALL_TOPICS.find(t => t.id === topic_id);
-    const subject = topic ? MOCK_SUBJECTS.find(s => s.id === topic.subject_id) : null;
-
-    if (!topic || !subject) {
-      return NextResponse.json({ error: 'Topic not found' }, { status: 404 });
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Supabase credentials not configured' }, { status: 500 });
     }
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check for Anthropic API key
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey === 'sk-ant-placeholder') {
-      // Return demo content instead
-      return NextResponse.json({
-        assets: asset_types.map((type, i) => ({
-          id: `gen-${Date.now()}-${i}`,
-          topic_id,
-          asset_type: type,
-          asset_subtype: type === 'game_questions' ? 'true_false' : type === 'realworld_card' ? 'everyday' : null,
-          title: `${topic.title} — ${type.replace('_', ' ')}`,
-          content_json: getDemoContent(type, topic.title, subject.name, age_group),
-          file_url: null,
-          thumbnail_url: null,
-          age_group,
-          key_stage: topic.key_stage,
-          status: 'draft',
-          generation_prompt: `Generate ${type} for ${topic.title} (${subject.name}), age group ${age_group}`,
-          generated_at: new Date().toISOString(),
-          reviewed_by: null,
-          reviewed_at: null,
-          linked_lesson_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })),
-        message: 'Demo content generated (no API key configured)',
-      });
-    }
+    // Look up topic and subject from real Supabase data
+    const { data: topicData } = await supabase
+      .from('topics')
+      .select('id, title, description, key_stage, subjects(name, colour_hex, color)')
+      .eq('id', topic_id)
+      .single();
 
-    // In production, call Claude API for each asset type
+    // Use DB data if available, fall back to body params
+    const topicTitle = topicData?.title || bodyTitle || 'Unknown Topic';
+    const topicDescription = (topicData as any)?.description || '';
+    const subjectData = (topicData as any)?.subjects;
+    const subjectName = subjectData?.name || bodySubjectName || 'General';
+    const subjectColour = subjectData?.colour_hex || subjectData?.color || '#64748b';
+    const topicKeyStage = (topicData as any)?.key_stage || key_stage;
+
+    // Call Claude API for each asset type
     const { getAnthropicClient, LUMI_MODEL } = await import('@/lib/anthropic');
     const client = getAnthropicClient();
 
-    const assets: TopicAsset[] = [];
+    const generatedAssets = [];
 
     for (const type of asset_types) {
-      const prompt = buildGenerationPrompt(type, topic.title, topic.description, subject.name, subject.colour_hex, age_group);
+      console.log(`[generate-content] Generating ${type} for topic ${topic_id}`);
+      const prompt = buildGenerationPrompt(type, topicTitle, topicDescription, subjectName, subjectColour, age_group);
 
-      const response = await client.messages.create({
-        model: LUMI_MODEL,
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }],
-      });
-
-      const text = response.content[0].type === 'text' ? response.content[0].text : '';
-
-      // Parse JSON from response
-      let contentJson = {};
+      let contentJson: Record<string, unknown> = {};
       try {
+        const response = await client.messages.create({
+          model: LUMI_MODEL,
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const text = response.content[0].type === 'text' ? response.content[0].text : '';
         const cleaned = text
           .replace(/^```(?:json)?\s*/m, '')
           .replace(/\s*```\s*$/m, '')
           .trim();
         contentJson = JSON.parse(cleaned);
-      } catch {
-        contentJson = { raw_text: text };
+      } catch (e: any) {
+        console.error(`[generate-content] Failed to generate/parse ${type}:`, e.message);
+        contentJson = { error: 'Generation failed', raw: String(e.message) };
       }
 
-      assets.push({
-        id: `gen-${Date.now()}-${assets.length}`,
+      const assetSubtype =
+        type === 'game_questions' ? 'true_false' :
+        type === 'realworld_card' ? 'everyday' : null;
+
+      generatedAssets.push({
         topic_id,
         asset_type: type,
-        asset_subtype: type === 'game_questions' ? 'true_false' : type === 'realworld_card' ? 'everyday' : null,
-        title: `${topic.title} — ${type.replace('_', ' ')}`,
+        asset_subtype: assetSubtype,
+        title: `${topicTitle} — ${type.replace(/_/g, ' ')}`,
         content_json: contentJson,
         file_url: null,
         thumbnail_url: null,
         age_group,
-        key_stage: topic.key_stage,
+        key_stage: topicKeyStage,
         status: 'draft',
         generation_prompt: prompt,
         generated_at: new Date().toISOString(),
-        reviewed_by: null,
-        reviewed_at: null,
-        linked_lesson_id: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        linked_lesson_id: linked_lesson_id || null,
       });
     }
 
-    return NextResponse.json({ assets, message: `Generated ${assets.length} assets` });
+    // Save all generated assets to Supabase
+    const { data: savedAssets, error: saveError } = await supabase
+      .from('topic_assets')
+      .insert(generatedAssets)
+      .select();
+
+    if (saveError) {
+      console.error('[generate-content] Failed to save assets to Supabase:', saveError);
+      return NextResponse.json({
+        assets: generatedAssets,
+        message: `Generated ${generatedAssets.length} assets (save failed: ${saveError.message})`,
+        save_error: saveError.message,
+      });
+    }
+
+    console.log(`[generate-content] Saved ${savedAssets?.length || 0} assets to Supabase`);
+
+    return NextResponse.json({
+      assets: savedAssets || generatedAssets,
+      message: `Generated and saved ${savedAssets?.length || generatedAssets.length} assets successfully`,
+    });
+
   } catch (error: any) {
-    console.error('Content generation error:', error);
+    console.error('[generate-content] Error:', error);
     return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 });
   }
 }
@@ -128,51 +140,43 @@ function buildGenerationPrompt(
 ): string {
   const base = `You are a UK curriculum content creator for Luminary, a homeschool learning platform. Generate content for:
 - Subject: ${subjectName}
-- Topic: ${topicTitle}
-- Description: ${topicDescription}
+- Topic: ${topicTitle}${topicDescription ? `\n- Description: ${topicDescription}` : ''}
 - Age group: ${ageGroup}
 - UK National Curriculum aligned
-
-Return ONLY valid JSON (no markdown, no explanation).`;
+Return ONLY valid JSON (no markdown, no code fences, no explanation).`;
 
   switch (type) {
     case 'concept_card':
-      return `${base}\n\nGenerate a concept card with this JSON structure:\n{"tagline": "short catchy phrase", "hook_question": "engaging question for the child", "definition": "clear age-appropriate explanation (2-3 sentences)", "image_prompt": "description for illustration"}`;
+      return `${base}
+
+Generate a concept card with this exact JSON structure:
+{"title": "topic title", "icon": "single relevant emoji", "subtitle": "short catchy tagline (max 8 words)", "body": "clear age-appropriate explanation in 2-3 sentences", "key_facts": ["fact 1", "fact 2", "fact 3"], "image_prompt": "description for an illustration suitable for children"}`;
+
     case 'realworld_card':
-      return `${base}\n\nGenerate a real-world everyday connection card:\n{"type": "everyday", "title": "catchy title", "description": "how this topic appears in daily life", "scenario": "specific relatable scenario", "image_prompt": "illustration description"}`;
+      return `${base}
+
+Generate a real-world connection card:
+{"everyday": {"title": "catchy title", "description": "how this topic appears in daily life (2-3 sentences)", "scenario": "specific relatable scenario a child would recognise", "image_prompt": "illustration description"}, "inspiring": {"title": "inspiring application title", "description": "an amazing professional or scientific application (2-3 sentences)", "image_prompt": "illustration description"}}`;
+
     case 'game_questions':
-      return `${base}\n\nGenerate a True or False game with 10 statements:\n{"statements": [{"id": "s1", "statement": "...", "is_true": true/false, "explanation": "why"}]}`;
+      return `${base}
+
+Generate a True or False game with exactly 10 statements:
+{"game_type": "true_false", "title": "${topicTitle} True or False", "instructions": "Is each statement true or false?", "statements": [{"id": "s1", "statement": "...", "is_true": true, "explanation": "brief why"}, {"id": "s2", "statement": "...", "is_true": false, "explanation": "brief why"}, {"id": "s3", "statement": "...", "is_true": true, "explanation": "brief why"}, {"id": "s4", "statement": "...", "is_true": false, "explanation": "brief why"}, {"id": "s5", "statement": "...", "is_true": true, "explanation": "brief why"}, {"id": "s6", "statement": "...", "is_true": false, "explanation": "brief why"}, {"id": "s7", "statement": "...", "is_true": true, "explanation": "brief why"}, {"id": "s8", "statement": "...", "is_true": false, "explanation": "brief why"}, {"id": "s9", "statement": "...", "is_true": true, "explanation": "brief why"}, {"id": "s10", "statement": "...", "is_true": false, "explanation": "brief why"}]}`;
+
     case 'worksheet':
-      return `${base}\n\nGenerate a worksheet:\n{"age_group": "${ageGroup}", "subject": "${subjectName}", "topic": "${topicTitle}", "recall_questions": [{"q": "...", "lines": 2}], "apply_questions": [{"q": "...", "lines": 3, "show_working_space": true}], "create_task": {"title": "...", "description": "...", "space_type": "lined", "lines": 10}, "reflect_prompts": ["..."]}`;
-    default:
-      return `${base}\n\nGenerate content for type "${type}" as a JSON object with appropriate fields.`;
-  }
-}
+      return `${base}
 
-function getDemoContent(type: AssetType, topicTitle: string, subjectName: string, ageGroup: string): Record<string, unknown> {
-  switch (type) {
-    case 'concept_card':
-      return {
-        tagline: `Understanding ${topicTitle}`,
-        hook_question: `What do you already know about ${topicTitle.toLowerCase()}?`,
-        definition: `This is a placeholder concept card for ${topicTitle} in ${subjectName}. In production, Claude would generate a clear, age-appropriate explanation.`,
-        image_prompt: `Simple flat illustration of ${topicTitle.toLowerCase()}, warm colours, suitable for children`,
-      };
-    case 'realworld_card':
-      return {
-        type: 'everyday',
-        title: `${topicTitle} in Real Life`,
-        description: `Placeholder showing how ${topicTitle.toLowerCase()} connects to everyday life.`,
-        scenario: `Imagine you are at the shops and need to use ${topicTitle.toLowerCase()}...`,
-      };
-    case 'game_questions':
-      return {
-        statements: [
-          { id: 's1', statement: `${topicTitle} is part of ${subjectName}`, is_true: true, explanation: 'This is a demo statement' },
-          { id: 's2', statement: 'This is a placeholder question', is_true: false, explanation: 'Generated by demo mode' },
-        ],
-      };
+Generate a printable worksheet:
+{"title": "${topicTitle} Worksheet", "age_group": "${ageGroup}", "subject": "${subjectName}", "topic": "${topicTitle}", "recall_questions": [{"q": "...", "lines": 2}, {"q": "...", "lines": 2}, {"q": "...", "lines": 2}], "apply_questions": [{"q": "...", "lines": 3, "show_working_space": true}, {"q": "...", "lines": 3, "show_working_space": true}], "create_task": {"title": "creative task title", "description": "task description", "space_type": "lined", "lines": 8}, "reflect_prompts": ["What was the most interesting thing you learned?", "How could you use this in real life?"]}`;
+
+    case 'check_questions':
+      return `${base}
+
+Generate 5 assessment questions:
+{"questions": [{"id": "q1", "question": "...", "type": "short_answer", "expected_answer": "model answer", "marks": 1, "hints": ["hint if stuck"]}, {"id": "q2", "question": "...", "type": "short_answer", "expected_answer": "model answer", "marks": 1, "hints": ["hint"]}, {"id": "q3", "question": "...", "type": "short_answer", "expected_answer": "model answer", "marks": 2, "hints": ["hint"]}, {"id": "q4", "question": "...", "type": "short_answer", "expected_answer": "model answer", "marks": 2, "hints": ["hint"]}, {"id": "q5", "question": "...", "type": "short_answer", "expected_answer": "model answer", "marks": 3, "hints": ["hint"]}]}`;
+
     default:
-      return { placeholder: true, topic: topicTitle, subject: subjectName, age_group: ageGroup };
+      return `${base}\n\nGenerate appropriate content for type "${type}" as a JSON object.`;
   }
 }

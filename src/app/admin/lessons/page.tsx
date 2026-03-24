@@ -199,29 +199,28 @@ export default function AdminLessonsPage() {
   const handleGenerateContent = async (lesson: any) => {
     setGeneratingContent(true);
     try {
-      const res = await fetch('/api/admin/queue-generation', {
+      const res = await fetch('/api/admin/generate-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'content',
           topic_id: lesson.topic_id,
           title: lesson.topics?.title,
           subject_name: lesson.topics?.subjects?.name,
           key_stage: lesson.key_stage,
           age_group: lesson.age_group,
           asset_types: ['concept_card', 'game_questions', 'realworld_card', 'worksheet'],
-          linked_lesson_id: lesson.id
+          linked_lesson_id: lesson.id,
         }),
       });
       
+      const data = await res.json();
       if (res.ok) {
-        const data = await res.json();
-        setLatestJob({ id: data.job_id, status: 'pending', progress: 0 });
-        setIsPolling(true);
-        alert('Content generation queued! Check the Library for progress.');
+        alert(`Content generated successfully! ${data.assets?.length || 0} assets saved to the Library.`);
+      } else {
+        alert(`Content generation failed: ${data.error || 'Unknown error'}`);
       }
     } catch (err) {
-      alert('Failed to queue content generation');
+      alert('Failed to generate content. Please try again.');
     } finally {
       setGeneratingContent(false);
     }
@@ -631,16 +630,78 @@ export default function AdminLessonsPage() {
                       </div>
                     </div>
 
-                    {/* Quick Preview of Phases */}
-                    <div className="space-y-4">
-                      {['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'].map((phase) => (
-                        <div key={phase} className="p-4 rounded-xl bg-white/5 border border-white/10">
-                          <h5 className="text-xs font-bold text-amber uppercase tracking-widest mb-2">{phase}</h5>
-                          <p className="text-sm text-white line-clamp-2">
-                            {selectedLesson[`${phase}_json`]?.phase_goal || 'No goal defined'}
-                          </p>
-                        </div>
-                      ))}
+                    {/* Full Phase Content Preview */}
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                      {['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'].map((phase) => {
+                        const phaseData = selectedLesson[`${phase}_json`];
+                        if (!phaseData) return (
+                          <div key={phase} className="p-4 rounded-xl bg-white/5 border border-white/10 opacity-40">
+                            <h5 className="text-xs font-bold text-amber uppercase tracking-widest">{phase}</h5>
+                            <p className="text-xs text-slate-light/40 mt-1">No data</p>
+                          </div>
+                        );
+                        return (
+                          <div key={phase} className="p-4 rounded-xl bg-white/5 border border-white/10">
+                            <h5 className="text-xs font-bold text-amber uppercase tracking-widest mb-2">{phase}</h5>
+                            {phaseData.phase_goal && (
+                              <p className="text-sm font-semibold text-white mb-3">{phaseData.phase_goal}</p>
+                            )}
+                            {phaseData.opening_question && (
+                              <div className="mb-3">
+                                <p className="text-[10px] font-bold text-slate-light/40 uppercase mb-1">Opening Question</p>
+                                <p className="text-sm text-sky-300 italic">&ldquo;{phaseData.opening_question}&rdquo;</p>
+                              </div>
+                            )}
+                            {phaseData.teaching_points && phaseData.teaching_points.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-[10px] font-bold text-slate-light/40 uppercase mb-1">Teaching Points</p>
+                                <ul className="space-y-1">
+                                  {phaseData.teaching_points.map((tp: string, i: number) => (
+                                    <li key={i} className="text-sm text-slate-light/80 flex gap-2">
+                                      <span className="text-amber shrink-0">&#8226;</span>
+                                      <span>{tp}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {phaseData.questions && phaseData.questions.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-[10px] font-bold text-slate-light/40 uppercase mb-1">Questions ({phaseData.questions.length})</p>
+                                <div className="space-y-2">
+                                  {phaseData.questions.map((q: any, i: number) => (
+                                    <div key={i} className="p-2 rounded-lg bg-white/5 border border-white/5">
+                                      <p className="text-sm text-white">{q.question || q.text}</p>
+                                      {q.expected_answer && (
+                                        <p className="text-xs text-emerald-400 mt-1">&#10003; {q.expected_answer}</p>
+                                      )}
+                                      {q.hints && q.hints.length > 0 && (
+                                        <p className="text-xs text-slate-light/40 mt-1">Hint: {q.hints[0]}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {phaseData.activities && phaseData.activities.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-[10px] font-bold text-slate-light/40 uppercase mb-1">Activities</p>
+                                <ul className="space-y-1">
+                                  {phaseData.activities.map((act: string, i: number) => (
+                                    <li key={i} className="text-sm text-slate-light/80 flex gap-2">
+                                      <span className="text-sky shrink-0">{i + 1}.</span>
+                                      <span>{act}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {phaseData.transition_to_next && (
+                              <p className="text-xs text-slate-light/40 italic mt-2">&#8594; {phaseData.transition_to_next}</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
