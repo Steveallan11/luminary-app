@@ -98,6 +98,7 @@ export async function generateLessonLogic(body: any, jobId: string) {
       .upsert({
         topic_id: brief.topic_id,
         age_group: brief.age_group,
+        key_stage: brief.key_stage,
         status: 'generating',
         spark_json: structure.spark_json,
         explore_json: structure.explore_json,
