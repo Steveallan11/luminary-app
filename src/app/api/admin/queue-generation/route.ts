@@ -37,10 +37,9 @@ export async function POST(req: NextRequest) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topic_id);
     
     if (!isUuid || topic_id === '00000000-0000-0000-0000-000000000000') {
-      // If not a valid UUID, we can't use it as a foreign key
-      // We'll try to find a real topic or just set it to null if the schema allows
-      // For now, let's try to set it to null to avoid the crash
-      safeTopicId = null;
+      // If not a valid UUID, we need a fallback to satisfy NOT NULL constraint
+      const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+      safeTopicId = fallbackTopic?.id || null;
     } else {
       // Verify it actually exists in the topics table
       const { data: topicExists } = await supabase
@@ -50,8 +49,9 @@ export async function POST(req: NextRequest) {
         .single();
       
       if (!topicExists) {
-        console.warn(`[queue-generation] Topic ${topic_id} not found in database, setting to null`);
-        safeTopicId = null;
+        console.warn(`[queue-generation] Topic ${topic_id} not found in database, fetching fallback`);
+        const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+        safeTopicId = fallbackTopic?.id || null;
       }
     }
 
