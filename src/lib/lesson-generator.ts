@@ -174,17 +174,19 @@ export async function generateLessonStructure(
   text = response.content[0]?.type === 'text' ? response.content[0].text : '';
 
   // Strip any markdown code fences if present
+  console.log(`[lesson-generator] Raw Claude response text: ${text.substring(0, 500)}...`); // Log first 500 chars
   const cleaned = text
-    .replace(/^```(?:json)?\s*/m, '')
-    .replace(/\s*```\s*$/m, '')
+    .replace(/^```(?:json)?\s*/m, "")
+    .replace(/\s*```\s*$/m, "")
     .trim();
 
   try {
     const parsed = JSON.parse(cleaned) as GeneratedLessonStructure;
     return parsed;
   } catch (err) {
+    console.error(`[lesson-generator] Failed to parse JSON. Raw cleaned text: ${cleaned.substring(0, 1000)}...`); // Log first 1000 chars of problematic JSON
     throw new Error(
-      `Failed to parse generated lesson structure: ${err instanceof Error ? err.message : 'Unknown error'}`
+      `Failed to parse generated lesson structure: ${err instanceof Error ? err.message : 'Unknown error'}. Problematic text logged.`
     );
   }
 }
