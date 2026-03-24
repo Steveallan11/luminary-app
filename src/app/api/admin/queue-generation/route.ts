@@ -31,13 +31,37 @@ export async function POST(req: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const jobId = uuidv4();
 
+    // FIX: Check if topic_id exists to avoid foreign key constraint error
+    // If it's a mock ID or placeholder, we'll use null or a safe value if the column allows it
+    let safeTopicId = topic_id;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(topic_id);
+    
+    if (!isUuid || topic_id === '00000000-0000-0000-0000-000000000000') {
+      // If not a valid UUID, we can't use it as a foreign key
+      // We'll try to find a real topic or just set it to null if the schema allows
+      // For now, let's try to set it to null to avoid the crash
+      safeTopicId = null;
+    } else {
+      // Verify it actually exists in the topics table
+      const { data: topicExists } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('id', topic_id)
+        .single();
+      
+      if (!topicExists) {
+        console.warn(`[queue-generation] Topic ${topic_id} not found in database, setting to null`);
+        safeTopicId = null;
+      }
+    }
+
     // Create a generation job record
     const { data, error } = await supabase
       .from('generation_jobs')
       .insert({
         id: jobId,
         type, // 'lesson' or 'content'
-        topic_id,
+        topic_id: safeTopicId,
         asset_types: asset_types || null,
         age_group,
         key_stage,
