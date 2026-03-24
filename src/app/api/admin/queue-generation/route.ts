@@ -38,36 +38,38 @@ export async function POST(req: NextRequest) {
     
     if (!isUuid || topic_id === '00000000-0000-0000-0000-000000000000') {
       // If not a valid UUID, we need a real fallback to satisfy NOT NULL and FOREIGN KEY constraints
-      let { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
-      
-      if (!fallbackTopic) {
-        console.warn('[queue-generation] Database empty, creating General fallback');
-        // Create General subject
-        let { data: generalSubject } = await supabase.from('subjects').select('id').eq('name', 'General').single();
-        if (!generalSubject) {
-          const { data: createdSubject } = await supabase.from('subjects').insert({ 
-            name: 'General', 
-            slug: 'general',
-            color: '#64748b' 
-          }).select().single();
-          generalSubject = createdSubject;
-        }
+      // First, try to create a topic for this specific request to keep it organized
+      let { data: generalSubject } = await supabase.from('subjects').select('id').eq('name', 'General').single();
+      if (!generalSubject) {
+        const { data: createdSubject } = await supabase.from('subjects').insert({ 
+          name: 'General', 
+          slug: 'general',
+          color: '#64748b' 
+        }).select().single();
+        generalSubject = createdSubject;
+      }
+
+      if (generalSubject) {
+        const { data: createdTopic } = await supabase.from('topics').insert({
+          title: title || 'Custom Topic',
+          subject_id: generalSubject.id,
+          slug: `custom-${Date.now()}`
+        }).select().single();
         
-        // Create General topic
-        if (generalSubject) {
-          const { data: createdTopic } = await supabase.from('topics').insert({
-            title: title || 'General Topic',
-            subject_id: generalSubject.id,
-            slug: `general-${Date.now()}`
-          }).select().single();
-          fallbackTopic = createdTopic;
+        if (createdTopic) {
+          safeTopicId = createdTopic.id;
         }
       }
-      
-      if (!fallbackTopic) {
-        throw new Error('No topics found in database and failed to create fallback.');
+
+      // If that failed, try to find ANY existing topic
+      if (!safeTopicId || safeTopicId === '00000000-0000-0000-0000-000000000000') {
+        const { data: fallbackTopic } = await supabase.from('topics').select('id').limit(1).single();
+        if (fallbackTopic) {
+          safeTopicId = fallbackTopic.id;
+        } else {
+          throw new Error('Database is empty and failed to create a fallback topic. Please ensure subjects are seeded.');
+        }
       }
-      safeTopicId = fallbackTopic.id;
     } else {
       // Verify it actually exists in the topics table
       const { data: topicExists } = await supabase
