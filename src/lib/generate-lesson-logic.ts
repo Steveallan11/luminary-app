@@ -92,13 +92,14 @@ export async function generateLessonLogic(body: any, jobId: string) {
     const qualityScore = scoreLessonQuality(structure);
     console.log(`[generate-lesson-logic] Job ${jobId} Quality score: ${qualityScore}`);
 
+    // Use upsert to handle the case where a lesson already exists for this topic+age_group+version
     const { data, error } = await supabase
       .from('topic_lesson_structures')
-      .insert({
+      .upsert({
         topic_id: brief.topic_id,
         age_group: brief.age_group,
         key_stage: brief.key_stage,
-        status: 'pending_review',
+        status: 'generating',
         spark_json: structure.spark_json,
         explore_json: structure.explore_json,
         anchor_json: structure.anchor_json,
@@ -111,8 +112,7 @@ export async function generateLessonLogic(body: any, jobId: string) {
         concept_card_json: structure.concept_card_json,
         realworld_json: structure.realworld_json,
         quality_score: qualityScore,
-        estimated_minutes: brief.estimated_minutes,
-      })
+      }, { onConflict: 'topic_id,age_group,version' })
       .select()
       .single();
 
