@@ -106,6 +106,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // If no Anthropic API key, return a mock stream so the UI doesn't crash
+    if (!process.env.ANTHROPIC_API_KEY) {
+      const lastUserMsg = messages[messages.length - 1]?.content ?? '';
+      const mockResponses = [
+        `Hey there! ✨ Great question! I'm Lumi, your learning buddy. I can see you're thinking about "${lastUserMsg.slice(0, 40)}..." — that's brilliant! To get me fully powered up, an Anthropic API key needs to be added to the environment. But the app is working perfectly! 🚀`,
+        `Ooh, I love that you're curious! 🌟 Once the Anthropic API key is connected, I'll be able to give you a proper answer and take you through the full lesson. You're going to love it!`,
+        `Great thinking! 💡 I'm running in demo mode right now — the real Lumi is even more fun and will walk you through everything step by step. Almost there!`,
+      ];
+      const mockText = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+      const encoder2 = new TextEncoder();
+      const mockStream = new ReadableStream({
+        async start(controller) {
+          const words = mockText.split(' ');
+          for (const word of words) {
+            controller.enqueue(encoder2.encode(`data: ${JSON.stringify({ text: word + ' ' })}\n\n`));
+            await new Promise((r) => setTimeout(r, 25));
+          }
+          controller.enqueue(encoder2.encode(`data: ${JSON.stringify({ phase: activePhase })}\n\n`));
+          controller.enqueue(encoder2.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+      return new Response(mockStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
     const client = getAnthropicClient();
     const stream = await client.messages.stream({
       model: LUMI_MODEL,
