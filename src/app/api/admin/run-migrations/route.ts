@@ -66,6 +66,7 @@ export async function GET() {
     lesson_knowledge_base: await tableExists('lesson_knowledge_base'),
     admin_test_sessions: await tableExists('admin_test_sessions'),
     topic_assets: await tableExists('topic_assets'),
+    lesson_phase_media: await tableExists('lesson_phase_media'),
   };
 
   return NextResponse.json({ tables });
@@ -78,13 +79,15 @@ export async function POST() {
   const kbExists = await tableExists('lesson_knowledge_base');
   const sessionsExists = await tableExists('admin_test_sessions');
   const assetsExists = await tableExists('topic_assets');
+  const mediaExists = await tableExists('lesson_phase_media');
 
   results.push({ name: 'lesson_knowledge_base', status: kbExists ? 'already_exists' : 'needs_creation', exists: kbExists });
   results.push({ name: 'admin_test_sessions', status: sessionsExists ? 'already_exists' : 'needs_creation', exists: sessionsExists });
   results.push({ name: 'topic_assets', status: assetsExists ? 'exists' : 'missing', exists: assetsExists });
+  results.push({ name: 'lesson_phase_media', status: mediaExists ? 'already_exists' : 'needs_creation', exists: mediaExists });
 
   // Try to create missing tables using raw SQL via the Supabase REST API
-  if (!kbExists || !sessionsExists) {
+  if (!kbExists || !sessionsExists || !mediaExists) {
     const sql = `
       ${!kbExists ? `CREATE TABLE IF NOT EXISTS lesson_knowledge_base (
         id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -116,6 +119,21 @@ export async function POST() {
         ended_at timestamptz,
         updated_at timestamptz DEFAULT now()
       );` : ''}
+      ${!mediaExists ? `CREATE TABLE IF NOT EXISTS lesson_phase_media (
+        id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+        lesson_id uuid NOT NULL REFERENCES topic_lesson_structures(id) ON DELETE CASCADE,
+        phase text NOT NULL,
+        media_type text NOT NULL CHECK (media_type IN ('image', 'video', 'gif', 'youtube', 'text_edit')),
+        url text,
+        thumbnail text,
+        title text,
+        source text,
+        lumi_instruction text,
+        display_order integer DEFAULT 0,
+        phase_text_override jsonb,
+        is_active boolean DEFAULT true,
+        created_at timestamptz DEFAULT now()
+      );` : ''}
     `;
 
     const result = await execSQL(sql);
@@ -144,6 +162,6 @@ export async function POST() {
   return NextResponse.json({ 
     success: true, 
     results,
-    note: 'If DDL execution failed, please run the SQL manually in Supabase SQL Editor. See /supabase-admin-test-sessions.sql in the repo.'
+    note: 'If DDL execution failed, please run the SQL manually in Supabase SQL Editor. See /supabase-migrations.sql in the repo.'
   });
 }
