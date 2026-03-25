@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
     if (childId && result.topic) {
       try {
         const supabase = await createServerSupabaseClient();
+        
+        // Create the lesson session
         await supabase
           .from('lesson_sessions')
           .insert({
@@ -68,6 +70,27 @@ export async function POST(request: NextRequest) {
             xp_earned: 0,
             duration_minutes: 0,
           });
+
+        // Update any pending assignment for this child+topic to "in_progress"
+        // Find the lesson structure for this topic
+        const { data: lessonStructure } = await supabase
+          .from('topic_lesson_structures')
+          .select('id')
+          .eq('topic_id', result.topic.id)
+          .single();
+
+        if (lessonStructure) {
+          await supabase
+            .from('lesson_assignments')
+            .update({
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+              session_id: result.sessionId,
+            })
+            .eq('child_id', childId)
+            .eq('lesson_structure_id', lessonStructure.id)
+            .eq('status', 'pending');
+        }
       } catch (err) {
         console.error('Failed to create lesson session:', err);
         // Continue anyway - we can still deliver the lesson
