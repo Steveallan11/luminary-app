@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { MOCK_CHILD, MOCK_CHILDREN, MOCK_SESSIONS } from '@/lib/mock-data';
 
 export const dynamic = 'force-dynamic';
@@ -13,13 +14,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const childId = searchParams.get('child_id');
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (supabaseUrl && supabaseKey && childId) {
+  if (childId) {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const supabase = await createServerSupabaseClient();
 
       const { data: child, error } = await supabase
         .from('children')
@@ -28,16 +25,26 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (!error && child) {
-        // Fetch recent sessions
+        // Fetch recent sessions from lesson_sessions table
         const { data: sessions } = await supabase
-          .from('learning_sessions')
+          .from('lesson_sessions')
           .select('*')
           .eq('child_id', childId)
           .order('started_at', { ascending: false })
           .limit(20);
 
         return NextResponse.json({
-          child,
+          child: {
+            id: child.id,
+            name: child.name,
+            age: child.age,
+            year_group: child.year_group,
+            avatar: child.avatar,
+            xp_total: child.xp_total || 0,
+            streak_days: child.streak_days || 0,
+            streak_last_date: child.streak_last_date,
+            learning_mode: child.learning_mode,
+          },
           sessions: sessions || [],
           source: 'supabase',
         });

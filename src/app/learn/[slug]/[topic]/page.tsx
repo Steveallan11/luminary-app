@@ -22,16 +22,11 @@ import Button from '@/components/ui/Button';
 import ContentRenderer from '@/components/content/ContentRenderer';
 import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPICS, LESSON_PHASE_LABELS } from '@/lib/mock-data';
 import { clampMastery, detectCorrectResponse, detectExplanation } from '@/lib/mastery';
-import { getXPLevel, LessonPhase, ParsedContentSignal } from '@/types';
+import { getXPLevel, LessonPhase, ParsedContentSignal, Avatar } from '@/types';
 import { buildContentManifest, getTopicProgress } from '@/lib/lesson-engine';
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase';
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
-
-// ── Child profile helper ─────────────────────────────────────────────────────
-function getChildIdFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('luminary_child_id') || sessionStorage.getItem('luminary_child_id');
-}
+import { getChildSession } from '@/lib/child-session';
 
 interface ChatMessage {
   id: string;
@@ -59,8 +54,25 @@ export default function LessonPage() {
 
   // Load live data on mount
   useEffect(() => {
-    const childId = getChildIdFromStorage();
-    const qp = childId ? `?child_id=${childId}` : '';
+    // Check for child session - redirect if not logged in
+    const session = getChildSession();
+    if (!session) {
+      router.push('/auth/login');
+      return;
+    }
+
+    const childId = session.childId;
+    
+    // Set initial child data from session
+    setActiveChild({
+      ...MOCK_CHILD,
+      id: session.childId,
+      name: session.childName,
+      avatar: session.avatar,
+      year_group: session.yearGroup,
+    });
+
+    const qp = `?child_id=${childId}`;
     fetch(`/api/learn/subjects${qp}`)
       .then((r) => r.json())
       .then((data) => {
@@ -72,13 +84,13 @@ export default function LessonPage() {
         }
       })
       .catch(() => {});
-    if (childId) {
-      fetch(`/api/learn/child-profile?child_id=${childId}`)
-        .then((r) => r.json())
-        .then((data) => { if (data.child) setActiveChild(data.child); })
-        .catch(() => {});
-    }
-  }, [slug]);
+    
+    // Fetch full child profile from API
+    fetch(`/api/learn/child-profile?child_id=${childId}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.child) setActiveChild(data.child); })
+      .catch(() => {});
+  }, [slug, router]);
 
   const subject = liveSubjects.find((s) => s.slug === slug) || MOCK_SUBJECTS.find((s) => s.slug === slug);
   const topics = liveTopics.length > 0 ? liveTopics : (MOCK_TOPICS[slug] || []);

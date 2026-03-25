@@ -84,12 +84,28 @@ export function buildContentManifest(topicId: string): ContentManifest {
   };
 }
 
+export interface ChildData {
+  id: string;
+  name: string;
+  age: number;
+  year_group: string;
+}
+
 export function startLesson(subjectSlug: string, topicSlug: string): LessonStartResult | null {
+  return startLessonForChild(subjectSlug, topicSlug, {
+    id: MOCK_CHILD.id,
+    name: MOCK_CHILD.name,
+    age: MOCK_CHILD.age,
+    year_group: MOCK_CHILD.year_group,
+  });
+}
+
+export function startLessonForChild(subjectSlug: string, topicSlug: string, child: ChildData): LessonStartResult | null {
   const topic = findTopicBySlug(subjectSlug, topicSlug);
   if (!topic) return null;
 
-  const structure = getLessonStructureForTopic(topic.id, MOCK_CHILD.age);
-  const ageGroup = getAgeGroup(MOCK_CHILD.age);
+  const structure = getLessonStructureForTopic(topic.id, child.age);
+  const ageGroup = getAgeGroup(child.age);
   const sessionId = `lesson-${topic.id}-${Date.now()}`;
 
   if (!structure) {
@@ -100,12 +116,24 @@ export function startLesson(subjectSlug: string, topicSlug: string): LessonStart
       structure: null,
       sessionId,
       phase: 'spark',
-      openingPrompt: `I’m building a fresh ${topic.title} lesson for ${MOCK_CHILD.name} now.`,
+      openingPrompt: `I'm building a fresh ${topic.title} lesson for ${child.name} now.`,
       estimatedSeconds: 12,
       progressMessage: 'Lumi is weaving together your personalised lesson arc, examples, and practice tasks.',
       contentManifest: buildContentManifest(topic.id),
     };
   }
+
+  return {
+    state: 'live',
+    topic,
+    ageGroup,
+    structure,
+    sessionId,
+    phase: 'spark',
+    openingPrompt: structure.spark_json?.opening_question ?? `What do you already know about ${topic.title}?`,
+    contentManifest: buildContentManifest(topic.id),
+  };
+}
 
   return {
     state: 'live',

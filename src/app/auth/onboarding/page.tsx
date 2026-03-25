@@ -1,20 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Starfield from '@/components/ui/Starfield';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Sparkles, AlertCircle } from 'lucide-react';
 import { AVATARS, YEAR_GROUPS, Avatar, LearningMode } from '@/types';
+import { setChildSession } from '@/lib/child-session';
 
-type OnboardingStep = 'name' | 'details' | 'avatar' | 'pin' | 'complete';
+type OnboardingStep = 'loading' | 'name' | 'details' | 'avatar' | 'pin' | 'saving' | 'complete';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<OnboardingStep>('name');
+  const [step, setStep] = useState<OnboardingStep>('loading');
   const [childName, setChildName] = useState('');
   const [age, setAge] = useState('');
   const [yearGroup, setYearGroup] = useState('');
@@ -23,6 +24,37 @@ export default function OnboardingPage() {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
+  const [error, setError] = useState('');
+  const [savedChild, setSavedChild] = useState<{ id: string; name: string; avatar: Avatar; yearGroup: string; familyId: string } | null>(null);
+
+  // Check auth status on mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/onboarding');
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Not authenticated, redirect to login
+        router.push('/auth/login');
+        return;
+      }
+
+      if (!data.needsOnboarding) {
+        // Already has children, redirect to parent dashboard
+        router.push('/parent');
+        return;
+      }
+
+      // Ready for onboarding
+      setStep('name');
+    } catch (err) {
+      router.push('/auth/login');
+    }
+  };
 
   const handlePinInput = (digit: string) => {
     if (pinStep === 'enter') {
@@ -39,13 +71,17 @@ export default function OnboardingPage() {
         setConfirmPin(newPin);
         if (newPin.length === 4) {
           if (newPin === pin) {
-            setTimeout(() => setStep('complete'), 300);
+            // PINs match, save the child
+            saveChild(newPin);
           } else {
+            // PINs don't match, reset
+            setError('PINs don\'t match. Try again.');
             setTimeout(() => {
               setConfirmPin('');
               setPinStep('enter');
               setPin('');
-            }, 500);
+              setError('');
+            }, 1500);
           }
         }
       }
@@ -57,6 +93,70 @@ export default function OnboardingPage() {
       setPin(pin.slice(0, -1));
     } else {
       setConfirmPin(confirmPin.slice(0, -1));
+    }
+  };
+
+  const saveChild = async (finalPin: string) => {
+    setStep('saving');
+    setError('');
+
+    try {
+      const res = await fetch('/api/auth/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          child: {
+            name: childName,
+            age: parseInt(age),
+            yearGroup,
+            learningMode,
+            avatar,
+            pin: finalPin,
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to save. Please try again.');
+        setStep('pin');
+        setPin('');
+        setConfirmPin('');
+        setPinStep('enter');
+        return;
+      }
+
+      setSavedChild({
+        id: data.child.id,
+        name: data.child.name,
+        avatar: data.child.avatar,
+        yearGroup: data.child.yearGroup,
+        familyId: data.familyId,
+      });
+      
+      setStep('complete');
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+      setStep('pin');
+      setPin('');
+      setConfirmPin('');
+      setPinStep('enter');
+    }
+  };
+
+  const handleStartLearning = () => {
+    if (savedChild) {
+      // Set child session for immediate learning
+      setChildSession({
+        childId: savedChild.id,
+        childName: savedChild.name,
+        avatar: savedChild.avatar,
+        yearGroup: savedChild.yearGroup,
+        familyId: savedChild.familyId,
+        loginAt: new Date().toISOString(),
+      });
+      router.push('/learn');
     }
   };
 
@@ -87,13 +187,13 @@ export default function OnboardingPage() {
         </div>
 
         {/* Progress bar */}
-        {step !== 'complete' && (
+        {step !== 'complete' && step !== 'loading' && step !== 'saving' && (
           <div className="flex items-center gap-2 mb-8 px-4">
-            {steps.slice(0, -1).map((s, i) => (
+            {steps.slice(0, -1).filter(s => s !== 'loading' && s !== 'saving').map((s, i) => (
               <div
                 key={s}
                 className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
-                  i <= currentStepIndex ? 'bg-amber' : 'bg-white/10'
+                  i <= currentStepIndex - 1 ? 'bg-amber' : 'bg-white/10'
                 }`}
               />
             ))}
@@ -101,6 +201,35 @@ export default function OnboardingPage() {
         )}
 
         <AnimatePresence mode="wait">
+          {/* Loading State */}
+          {step === 'loading' && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="rounded-3xl bg-navy-light/60 backdrop-blur-sm border border-white/10 p-8 text-center"
+            >
+              <div className="w-12 h-12 border-4 border-amber border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-slate-light/70">Loading...</p>
+            </motion.div>
+          )}
+
+          {/* Saving State */}
+          {step === 'saving' && (
+            <motion.div
+              key="saving"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="rounded-3xl bg-navy-light/60 backdrop-blur-sm border border-white/10 p-8 text-center"
+            >
+              <div className="w-12 h-12 border-4 border-amber border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-white font-semibold mb-2">Creating {childName}&apos;s profile...</p>
+              <p className="text-slate-light/70 text-sm">Setting up their learning universe</p>
+            </motion.div>
+          )}
+
           {/* Step 1: Child's Name */}
           {step === 'name' && (
             <motion.div
@@ -280,7 +409,7 @@ export default function OnboardingPage() {
               className="rounded-3xl bg-navy-light/60 backdrop-blur-sm border border-white/10 p-8"
             >
               <button
-                onClick={() => { setStep('avatar'); setPin(''); setConfirmPin(''); setPinStep('enter'); }}
+                onClick={() => { setStep('avatar'); setPin(''); setConfirmPin(''); setPinStep('enter'); setError(''); }}
                 className="flex items-center gap-1 text-sm text-slate-light/60 hover:text-white transition-colors mb-4"
               >
                 <ArrowLeft size={14} /> Back
@@ -299,7 +428,7 @@ export default function OnboardingPage() {
               </p>
 
               {/* PIN dots */}
-              <div className="flex items-center justify-center gap-4 mb-8">
+              <div className="flex items-center justify-center gap-4 mb-6">
                 {[0, 1, 2, 3].map((i) => {
                   const currentPin = pinStep === 'enter' ? pin : confirmPin;
                   return (
@@ -314,6 +443,13 @@ export default function OnboardingPage() {
                   );
                 })}
               </div>
+
+              {error && (
+                <div className="mb-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 text-center flex items-center justify-center gap-2">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+              )}
 
               {/* Number pad */}
               <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
@@ -381,7 +517,7 @@ export default function OnboardingPage() {
 
               <div className="space-y-3">
                 <Button
-                  onClick={() => router.push('/learn')}
+                  onClick={handleStartLearning}
                   variant="primary"
                   size="lg"
                   className="w-full gap-2"

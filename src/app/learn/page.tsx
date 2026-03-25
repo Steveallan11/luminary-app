@@ -7,8 +7,9 @@ import ChildLayout from '@/components/layout/ChildLayout';
 import SubjectCard from '@/components/child/SubjectCard';
 import { MOCK_SUBJECTS, MOCK_CHILD, MOCK_SESSIONS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { getGreeting, formatTimeAgo } from '@/lib/utils';
-import { AVATAR_EMOJI_MAP } from '@/types';
+import { AVATAR_EMOJI_MAP, Avatar } from '@/types';
 import type { Subject } from '@/types';
+import { getChildSession, clearChildSession } from '@/lib/child-session';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SubjectData {
@@ -25,19 +26,26 @@ interface ChildData {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function getChildIdFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('luminary_child_id') || sessionStorage.getItem('luminary_child_id');
-}
+import { useRouter } from 'next/navigation';
 
 export default function LearnPage() {
+  const router = useRouter();
   const [subjectData, setSubjectData] = useState<SubjectData | null>(null);
   const [childData, setChildData] = useState<ChildData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const childId = getChildIdFromStorage();
-    const params = childId ? `?child_id=${childId}` : '';
+    // Check for child session
+    const session = getChildSession();
+    
+    if (!session) {
+      // No child session, redirect to login
+      router.push('/auth/login');
+      return;
+    }
+
+    const childId = session.childId;
+    const params = `?child_id=${childId}`;
 
     Promise.all([
       fetch(`/api/learn/subjects${params}`).then((r) => r.json()).catch(() => null),
@@ -49,14 +57,27 @@ export default function LearnPage() {
         progress: MOCK_TOPIC_PROGRESS as any,
         source: 'mock',
       });
+      
+      // Use session data as fallback if API fails
+      const fallbackChild = {
+        id: session.childId,
+        name: session.childName,
+        avatar: session.avatar,
+        year_group: session.yearGroup,
+        age: MOCK_CHILD.age,
+        xp_total: 0,
+        streak_days: 0,
+        learning_mode: 'full_homeschool' as const,
+      };
+      
       setChildData(cData || {
-        child: MOCK_CHILD,
-        sessions: MOCK_SESSIONS,
+        child: fallbackChild,
+        sessions: [],
         source: 'mock',
       });
       setIsLoading(false);
     });
-  }, []);
+  }, [router]);
 
   const child = childData?.child || MOCK_CHILD;
   const subjects = subjectData?.subjects || MOCK_SUBJECTS;

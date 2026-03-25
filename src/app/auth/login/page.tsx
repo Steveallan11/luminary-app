@@ -7,20 +7,21 @@ import Link from 'next/link';
 import Starfield from '@/components/ui/Starfield';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { ArrowRight, ArrowLeft, User, Shield } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Shield } from 'lucide-react';
 import { AVATAR_EMOJI_MAP, Avatar } from '@/types';
+import { setChildSession } from '@/lib/child-session';
 
 type LoginStep = 'email' | 'select-child' | 'pin' | 'parent-password';
-
 type LoginType = 'child' | 'parent' | 'admin';
 
 const ADMIN_TEST_EMAIL = 'steveallan2018@gmail.com';
 
-// Mock children for demo
-const mockChildren = [
-  { id: '1', name: 'Oliver', avatar: 'fox' as Avatar, year_group: 'Year 3' },
-  { id: '2', name: 'Amelia', avatar: 'unicorn' as Avatar, year_group: 'Year 5' },
-];
+interface ChildProfile {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  year_group: string;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,12 +29,15 @@ export default function LoginPage() {
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedChild, setSelectedChild] = useState<typeof mockChildren[0] | null>(null);
+  const [selectedChild, setSelectedChild] = useState<ChildProfile | null>(null);
+  const [children, setChildren] = useState<ChildProfile[]>([]);
+  const [familyId, setFamilyId] = useState<string>('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [loginType, setLoginType] = useState<LoginType>('child');
   const [error, setError] = useState('');
   const modeParam = searchParams.get('mode');
+  const redirectParam = searchParams.get('redirect');
 
   useEffect(() => {
     if (modeParam === 'admin') {
@@ -42,22 +46,48 @@ export default function LoginPage() {
     }
   }, [modeParam]);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
+
     if (loginType === 'child') {
-      setStep('select-child');
+      try {
+        // Fetch children for this parent email
+        const res = await fetch(`/api/auth/child-login?email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || 'No account found with this email');
+          return;
+        }
+
+        if (!data.children || data.children.length === 0) {
+          setError('No learner profiles found. Ask a parent to add you first!');
+          return;
+        }
+
+        setChildren(data.children);
+        setFamilyId(data.familyId);
+        setStep('select-child');
+      } catch (err) {
+        setError('Something went wrong. Please try again.');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
+
+    setLoading(false);
     setStep('parent-password');
   };
 
-  const handleChildSelect = (child: typeof mockChildren[0]) => {
+  const handleChildSelect = (child: ChildProfile) => {
     setSelectedChild(child);
     setStep('pin');
   };
 
-  const handlePinInput = (digit: string) => {
+  const handlePinInput = async (digit: string) => {
     if (loading || pin.length >= 4) {
       return;
     }
@@ -69,11 +99,42 @@ export default function LoginPage() {
     if (newPin.length === 4) {
       setLoading(true);
 
-      window.setTimeout(() => {
-        setLoading(false);
-        setPin('');
+      try {
+        const res = await fetch('/api/auth/child-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            childId: selectedChild?.id,
+            pin: newPin,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || 'Incorrect PIN. Try again!');
+          setPin('');
+          setLoading(false);
+          return;
+        }
+
+        // Set child session in localStorage
+        setChildSession({
+          childId: data.child.id,
+          childName: data.child.name,
+          avatar: data.child.avatar,
+          yearGroup: data.child.yearGroup,
+          familyId: data.child.familyId,
+          loginAt: new Date().toISOString(),
+        });
+
+        // Navigate to learn page
         router.push('/learn');
-      }, 350);
+      } catch (err) {
+        setError('Something went wrong. Try again!');
+        setPin('');
+        setLoading(false);
+      }
     }
   };
 
@@ -105,8 +166,24 @@ export default function LoginPage() {
         return;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 800));
-      router.push('/parent');
+      // Parent login with Supabase
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Invalid email or password');
+        return;
+      }
+
+      // Redirect to parent dashboard or original destination
+      router.push(redirectParam || '/parent');
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -195,15 +272,29 @@ export default function LoginPage() {
 
               <form onSubmit={handleEmailSubmit} className="space-y-5">
                 <Input
-                  label={loginType === 'admin' ? 'Admin Email' : 'Parent\'s Email'}
+                  label={loginType === 'admin' ? 'Admin Email' : loginType === 'child' ? 'Parent&apos;s Email' : 'Email Address'}
                   type="email"
                   placeholder={loginType === 'admin' ? ADMIN_TEST_EMAIL : 'parent@example.com'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
-                <Button type="submit" variant="primary" size="lg" className="w-full gap-2">
-                  Continue <ArrowRight size={18} />
+                
+                {error && (
+                  <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    {error}
+                  </div>
+                )}
+                
+                <Button type="submit" variant="primary" size="lg" className="w-full gap-2" disabled={loading}>
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-navy border-t-transparent rounded-full animate-spin" />
+                      Loading...
+                    </span>
+                  ) : (
+                    <>Continue <ArrowRight size={18} /></>
+                  )}
                 </Button>
               </form>
 
@@ -228,7 +319,7 @@ export default function LoginPage() {
               className="rounded-3xl bg-navy-light/60 backdrop-blur-sm border border-white/10 p-8"
             >
               <button
-                onClick={() => setStep('email')}
+                onClick={() => { setStep('email'); setChildren([]); setError(''); }}
                 className="flex items-center gap-1 text-sm text-slate-light/60 hover:text-white transition-colors mb-4"
               >
                 <ArrowLeft size={14} /> Back
@@ -243,7 +334,7 @@ export default function LoginPage() {
               <p className="text-slate-light/70 text-center mb-6">Choose your profile</p>
 
               <div className="space-y-3">
-                {mockChildren.map((child) => (
+                {children.map((child) => (
                   <motion.button
                     key={child.id}
                     whileHover={{ scale: 1.02 }}
@@ -275,7 +366,7 @@ export default function LoginPage() {
               className="rounded-3xl bg-navy-light/60 backdrop-blur-sm border border-white/10 p-8"
             >
               <button
-                onClick={() => { setStep('select-child'); setPin(''); }}
+                onClick={() => { setStep('select-child'); setPin(''); setError(''); }}
                 className="flex items-center gap-1 text-sm text-slate-light/60 hover:text-white transition-colors mb-4"
               >
                 <ArrowLeft size={14} /> Back
@@ -292,7 +383,6 @@ export default function LoginPage() {
                   Hi, {selectedChild.name}!
                 </h2>
                 <p className="text-slate-light/70">Enter your secret PIN</p>
-                <p className="text-xs text-slate-light/50 mt-2">Demo mode: any 4 digits will take you into your learning world.</p>
               </div>
 
               {/* PIN dots */}
@@ -370,7 +460,7 @@ export default function LoginPage() {
               className="rounded-3xl bg-navy-light/60 backdrop-blur-sm border border-white/10 p-8"
             >
               <button
-                onClick={() => setStep('email')}
+                onClick={() => { setStep('email'); setError(''); }}
                 className="flex items-center gap-1 text-sm text-slate-light/60 hover:text-white transition-colors mb-4"
               >
                 <ArrowLeft size={14} /> Back
@@ -380,9 +470,13 @@ export default function LoginPage() {
                 className="text-2xl font-bold text-white mb-2 text-center"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
-                Parent Login
+                {loginType === 'admin' ? 'Admin Login' : 'Parent Login'}
               </h2>
-              <p className="text-slate-light/70 text-center mb-6">{loginType === 'admin' ? 'Use your allowlisted admin email to enter the admin area.' : 'Enter your password to continue'}</p>
+              <p className="text-slate-light/70 text-center mb-6">
+                {loginType === 'admin' 
+                  ? 'Use your allowlisted admin email to enter the admin area.' 
+                  : 'Enter your password to continue'}
+              </p>
 
               <form onSubmit={handleParentLogin} className="space-y-5">
                 {loginType !== 'admin' && (

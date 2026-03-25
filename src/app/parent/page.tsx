@@ -1,30 +1,116 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar, Clock, Zap, BookOpen, Flame, BarChart3,
-  ChevronRight, Plus, Download, Settings, ChevronDown,
+  ChevronRight, Plus, Download, Settings, ChevronDown, Loader2,
 } from 'lucide-react';
 import ParentNav from '@/components/layout/ParentNav';
 import {
   MOCK_CHILDREN, MOCK_SUBJECTS, MOCK_SESSIONS,
   MOCK_TOPIC_PROGRESS, MOCK_TOPICS, MOCK_FAMILY,
 } from '@/lib/mock-data';
-import { AVATAR_EMOJI_MAP, getXPLevel, getXPProgress } from '@/types';
+import { AVATAR_EMOJI_MAP, getXPLevel, getXPProgress, Child } from '@/types';
 import { formatTimeAgo } from '@/lib/utils';
 
+interface FamilyData {
+  id: string;
+  name: string;
+}
+
+interface SessionData {
+  id: string;
+  child_id: string;
+  topic_id: string;
+  started_at: string;
+  duration_minutes: number;
+  xp_earned: number;
+  summary_text: string | null;
+}
+
 export default function ParentDashboard() {
-  const [selectedChildId, setSelectedChildId] = useState(MOCK_CHILDREN[0].id);
-  const child = MOCK_CHILDREN.find((c) => c.id === selectedChildId) || MOCK_CHILDREN[0];
-  const family = MOCK_FAMILY;
+  const [isLoading, setIsLoading] = useState(true);
+  const [children, setChildren] = useState<Child[]>(MOCK_CHILDREN);
+  const [family, setFamily] = useState<FamilyData>({ id: MOCK_FAMILY.id, name: MOCK_FAMILY.family_name });
+  const [sessions, setSessions] = useState<SessionData[]>(MOCK_SESSIONS as SessionData[]);
+  const [selectedChildId, setSelectedChildId] = useState<string>('');
+
+  // Fetch real data on mount
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/parent/children');
+        const data = await res.json();
+
+        if (res.ok && data.children?.length > 0) {
+          setChildren(data.children);
+          setFamily(data.family);
+          setSessions(data.sessions || []);
+          setSelectedChildId(data.children[0].id);
+        } else {
+          // Fall back to mock data
+          setSelectedChildId(MOCK_CHILDREN[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to fetch parent data:', err);
+        setSelectedChildId(MOCK_CHILDREN[0].id);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  const child = children.find((c) => c.id === selectedChildId) || children[0];
   const level = getXPLevel(child.xp_total);
   const xpProgress = getXPProgress(child.xp_total);
 
   const childSessions = useMemo(
-    () => MOCK_SESSIONS.filter((s) => s.child_id === child.id),
-    [child.id]
+    () => sessions.filter((s) => s.child_id === child?.id),
+    [child?.id, sessions]
   );
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-navy">
+        <ParentNav />
+        <main className="pt-16 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Loader2 size={32} className="text-electric animate-spin mx-auto mb-3" />
+              <p className="text-slate-light/60 text-sm">Loading dashboard...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!child) {
+    return (
+      <div className="min-h-screen bg-navy">
+        <ParentNav />
+        <main className="pt-16 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <p className="text-5xl mb-4">👶</p>
+              <h1 className="text-2xl font-bold text-white mb-3">No children yet</h1>
+              <p className="text-slate-light/70 mb-6">Add your first learner to get started!</p>
+              <a
+                href="/auth/onboarding"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-electric text-white font-semibold"
+              >
+                <Plus size={18} /> Add Child
+              </a>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   // Overview stats
   const now = Date.now();
@@ -152,8 +238,8 @@ export default function ParentDashboard() {
         </motion.div>
 
         {/* Child selector */}
-        <motion.div className="flex gap-3 mb-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}>
-          {MOCK_CHILDREN.map((c) => (
+        <motion.div className="flex gap-3 mb-6 flex-wrap" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}>
+          {children.map((c) => (
             <button
               key={c.id}
               onClick={() => { setSelectedChildId(c.id); setActivityPage(1); }}
