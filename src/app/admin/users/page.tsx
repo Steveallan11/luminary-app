@@ -72,14 +72,18 @@ export default function AdminUsersPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      console.log('[v0] Fetching admin users data...');
       const res = await fetch('/api/admin/users');
       const data = await res.json();
+      console.log('[v0] Admin users API response:', { ok: res.ok, familiesCount: data.families?.length, stats: data.stats });
       if (res.ok) {
         setFamilies(data.families || []);
         setStats(data.stats || null);
+      } else {
+        console.error('[v0] API error:', data.error);
       }
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      console.error('[v0] Failed to fetch users:', err);
     } finally {
       setLoading(false);
     }
