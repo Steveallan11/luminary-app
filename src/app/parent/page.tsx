@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar, Clock, Zap, BookOpen, Flame, BarChart3,
@@ -74,6 +74,28 @@ export default function ParentDashboard() {
 
   // Activity feed with pagination
   const [activityPage, setActivityPage] = useState(1);
+  const [reportPeriod, setReportPeriod] = useState<'term' | 'month' | 'year'>('term');
+  const [showReportMenu, setShowReportMenu] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const reportMenuRef = useRef<HTMLDivElement>(null);
+
+  const downloadReport = async (period: 'term' | 'month' | 'year') => {
+    setIsDownloading(true);
+    setShowReportMenu(false);
+    try {
+      const url = `/api/reports/generate?child_id=${child.id}&period=${period}`;
+      const response = await fetch(url);
+      const html = await response.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Luminary-LA-Report-${child.name.replace(/ /g, '-')}-${period}-${new Date().toISOString().split('T')[0]}.html`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
   const pageSize = 5;
   const paginatedSessions = childSessions.slice(0, activityPage * pageSize);
   const hasMoreSessions = childSessions.length > activityPage * pageSize;
@@ -325,19 +347,45 @@ export default function ParentDashboard() {
             </div>
             <ChevronRight size={16} className="text-slate-light/30 group-hover:text-white transition-colors" />
           </a>
-          <button
-            onClick={() => { window.location.href = '/api/reports/generate?child_id=' + child.id; }}
-            className="flex items-center gap-3 p-4 rounded-2xl bg-navy-light/40 border border-electric/20 hover:border-electric/40 transition-all group text-left"
-          >
-            <div className="w-10 h-10 rounded-xl bg-electric/10 flex items-center justify-center">
-              <Download size={18} className="text-electric" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-white">Download Report</p>
-              <p className="text-xs text-slate-light/50">Progress PDF</p>
-            </div>
-            <ChevronRight size={16} className="text-slate-light/30 group-hover:text-white transition-colors" />
-          </button>
+          <div className="relative" ref={reportMenuRef}>
+            <button
+              onClick={() => setShowReportMenu((v) => !v)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-navy-light/40 border border-electric/20 hover:border-electric/40 transition-all group text-left"
+              disabled={isDownloading}
+            >
+              <div className="w-10 h-10 rounded-xl bg-electric/10 flex items-center justify-center">
+                <Download size={18} className={isDownloading ? 'text-electric/40 animate-bounce' : 'text-electric'} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-white">{isDownloading ? 'Generating...' : 'Download LA Report'}</p>
+                <p className="text-xs text-slate-light/50">
+                  {reportPeriod === 'month' ? 'Monthly' : reportPeriod === 'year' ? 'Annual' : 'Termly'} report
+                </p>
+              </div>
+              <ChevronDown size={16} className={`text-slate-light/30 group-hover:text-white transition-all ${showReportMenu ? 'rotate-180' : ''}`} />
+            </button>
+            {showReportMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-navy-light border border-electric/20 shadow-xl overflow-hidden z-50">
+                <p className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-light/40">Report Period</p>
+                {[
+                  { value: 'month' as const, label: 'Monthly', desc: 'Last 30 days' },
+                  { value: 'term' as const, label: 'Termly', desc: 'Last 90 days' },
+                  { value: 'year' as const, label: 'Annual', desc: 'Last 12 months' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setReportPeriod(opt.value); void downloadReport(opt.value); }}
+                    className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-electric/10 ${
+                      reportPeriod === opt.value ? 'text-electric font-bold' : 'text-white'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    <span className="text-xs text-slate-light/40">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <a href="/pricing" className="flex items-center gap-3 p-4 rounded-2xl bg-navy-light/40 border border-purple-500/20 hover:border-purple-500/40 transition-all group">
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
               <Settings size={18} className="text-purple-400" />

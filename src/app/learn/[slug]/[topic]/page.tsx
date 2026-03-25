@@ -27,13 +27,19 @@ import { buildContentManifest, getTopicProgress } from '@/lib/lesson-engine';
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase';
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
 
+// ── Child profile helper ─────────────────────────────────────────────────────
+function getChildIdFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('luminary_child_id') || sessionStorage.getItem('luminary_child_id');
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   contentSignals?: ParsedContentSignal[];
-  imageSignals?: { url: string }[];
+  imageSignals?: { url: string; media_type?: 'image' | 'gif' | 'youtube'; title?: string }[];
   phase?: LessonPhase;
 }
 
@@ -47,8 +53,35 @@ export default function LessonPage() {
   const slug = params.slug as string;
   const topicSlug = params.topic as string;
 
-  const subject = MOCK_SUBJECTS.find((s) => s.slug === slug);
-  const topics = MOCK_TOPICS[slug] || [];
+  const [activeChild, setActiveChild] = useState(MOCK_CHILD);
+  const [liveSubjects, setLiveSubjects] = useState(MOCK_SUBJECTS);
+  const [liveTopics, setLiveTopics] = useState(MOCK_TOPICS[slug] || []);
+
+  // Load live data on mount
+  useEffect(() => {
+    const childId = getChildIdFromStorage();
+    const qp = childId ? `?child_id=${childId}` : '';
+    fetch(`/api/learn/subjects${qp}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.subjects?.length) setLiveSubjects(data.subjects);
+        if (data.topics?.length) {
+          const subjectObj = data.subjects?.find((s: any) => s.slug === slug);
+          const filtered = data.topics.filter((t: any) => t.subject_id === subjectObj?.id);
+          if (filtered.length) setLiveTopics(filtered);
+        }
+      })
+      .catch(() => {});
+    if (childId) {
+      fetch(`/api/learn/child-profile?child_id=${childId}`)
+        .then((r) => r.json())
+        .then((data) => { if (data.child) setActiveChild(data.child); })
+        .catch(() => {});
+    }
+  }, [slug]);
+
+  const subject = liveSubjects.find((s) => s.slug === slug) || MOCK_SUBJECTS.find((s) => s.slug === slug);
+  const topics = liveTopics.length > 0 ? liveTopics : (MOCK_TOPICS[slug] || []);
   const topic = topics.find((t) => t.slug === topicSlug);
   const subjectColour = subject?.colour_hex ?? '#8B5CF6';
 
@@ -130,7 +163,7 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: MOCK_CHILD.id,
+          child_id: activeChild.id,
           subject_slug: slug,
           topic_slug: topicSlug,
         }),
@@ -169,7 +202,7 @@ export default function LessonPage() {
         {
           id: `msg-${Date.now()}`,
           role: 'assistant',
-          content: `Hey ${MOCK_CHILD.name}! ✨ I’m Lumi, and I’m ready to explore ${topic?.title} with you. What do you already know about it?`,
+          content: `Hey ${activeChild.name}! ✨ I’m Lumi, and I’m ready to explore ${topic?.title} with you. What do you already know about it?`,
           timestamp: new Date(),
           phase: 'spark',
         },
@@ -229,7 +262,7 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: MOCK_CHILD.id,
+          child_id: activeChild.id,
           session_id: activeSessionId,
           subject_slug: slug,
           topic_slug: topicSlug,
@@ -260,7 +293,7 @@ export default function LessonPage() {
   const fetchOpeningMessage = async (activeSessionId?: string, afterGeneration: boolean = false) => {
     setSessionState('loading');
     try {
-      const res = await fetch(`/api/lumi/opening-message?child_id=${MOCK_CHILD.id}&subject_slug=${slug}&topic_slug=${topicSlug}`);
+      const res = await fetch(`/api/lumi/opening-message?child_id=${activeChild.id}&subject_slug=${slug}&topic_slug=${topicSlug}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to get opening message');
@@ -288,7 +321,7 @@ export default function LessonPage() {
         {
           id: `msg-${Date.now()}`,
           role: 'assistant',
-          content: `Hey ${MOCK_CHILD.name}! ✨ I’m Lumi, your learning buddy! Today we’re exploring ${topic?.title}. Before we dive in, what do you think you already know?`,
+          content: `Hey ${activeChild.name}! ✨ I’m Lumi, your learning buddy! Today we’re exploring ${topic?.title}. Before we dive in, what do you think you already know?`,
           timestamp: new Date(),
           phase: 'spark',
         },
@@ -324,7 +357,7 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: MOCK_CHILD.id,
+          child_id: activeChild.id,
           topic_id: topic?.id,
           subject_slug: slug,
           topic_slug: topicSlug,
@@ -452,13 +485,13 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: MOCK_CHILD.id,
+          child_id: activeChild.id,
           topic_id: topic?.id,
           topic_title: topic?.title,
           session_id: sessionId,
           message_count: messages.length,
           mastery_score: masteryScore,
-          child_name: MOCK_CHILD.name,
+          child_name: activeChild.name,
         }),
       });
 
@@ -482,8 +515,8 @@ export default function LessonPage() {
         xp: fallbackXP,
         mastery: clampMastery(masteryScore + 15),
         status: masteryScore + 15 >= 70 ? 'completed' : 'in_progress',
-        newXpTotal: MOCK_CHILD.xp_total + fallbackXP,
-        newStreak: MOCK_CHILD.streak_days,
+        newXpTotal: activeChild.xp_total + fallbackXP,
+        newStreak: activeChild.streak_days,
       });
       setCompletionBurst(true);
       awardXp(fallbackXP);
@@ -518,7 +551,7 @@ export default function LessonPage() {
     );
   }
 
-  const currentLevel = getXPLevel((sessionSummary?.newXpTotal ?? MOCK_CHILD.xp_total) + xpEarned);
+  const currentLevel = getXPLevel((sessionSummary?.newXpTotal ?? activeChild.xp_total) + xpEarned);
 
   return (
     <div className="min-h-screen bg-midnight text-white relative overflow-hidden">
@@ -562,8 +595,8 @@ export default function LessonPage() {
               <div className="mt-3 flex items-center gap-3">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-3xl">🦄</div>
                 <div>
-                  <p className="text-lg font-black">{MOCK_CHILD.name}</p>
-                  <p className="text-sm text-slate-light/60">{MOCK_CHILD.year_group} · {currentLevel.name}</p>
+                  <p className="text-lg font-black">{activeChild.name}</p>
+                  <p className="text-sm text-slate-light/60">{activeChild.year_group} · {currentLevel.name}</p>
                 </div>
               </div>
             </div>
@@ -687,7 +720,7 @@ export default function LessonPage() {
                     <PartyPopper className="h-10 w-10" />
                   </div>
                   <p className="text-xs uppercase tracking-[0.3em] text-amber/80">Session complete</p>
-                  <h2 className="mt-3 text-3xl font-black">Fantastic work, {MOCK_CHILD.name}!</h2>
+                  <h2 className="mt-3 text-3xl font-black">Fantastic work, {activeChild.name}!</h2>
                   <p className="mt-3 text-slate-light/70">{sessionSummary.text}</p>
 
                   <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -749,7 +782,7 @@ export default function LessonPage() {
                                   assets={contentAssets}
                                   diagrams={diagrams}
                                   subjectColour={subjectColour}
-                                  childAge={MOCK_CHILD.age}
+                                  childAge={activeChild.age}
                                   onGameComplete={(result) => awardXp(result.xpEarned)}
                                 />
                               </div>
@@ -760,25 +793,54 @@ export default function LessonPage() {
                         {message.role === 'assistant' && message.imageSignals && message.imageSignals.length > 0 && (
                           <div className="w-full space-y-3">
                             {message.imageSignals.map((img, imgIdx) => (
-                              <div
+                              <motion.div
                                 key={`${message.id}-img-${imgIdx}`}
+                                initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ duration: 0.4, delay: imgIdx * 0.1 }}
                                 className="overflow-hidden rounded-[26px] border border-white/10 bg-slate-950/60"
                               >
-                                <img
-                                  src={img.url}
-                                  alt="Teaching visual from Lumi"
-                                  className="w-full rounded-t-[26px] object-cover"
-                                  style={{ maxHeight: '360px' }}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
+                                {img.media_type === 'youtube' ? (
+                                  <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                                    <iframe
+                                      src={img.url}
+                                      title={img.title || 'Lumi video'}
+                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                      allowFullScreen
+                                      className="absolute inset-0 h-full w-full rounded-t-[26px]"
+                                    />
+                                  </div>
+                                ) : img.media_type === 'gif' ? (
+                                  <img
+                                    src={img.url}
+                                    alt={img.title || 'Fun visual from Lumi'}
+                                    className="w-full rounded-t-[26px] object-contain"
+                                    style={{ maxHeight: '300px', background: 'rgba(0,0,0,0.3)' }}
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <img
+                                    src={img.url}
+                                    alt={img.title || 'Teaching visual from Lumi'}
+                                    className="w-full rounded-t-[26px] object-cover"
+                                    style={{ maxHeight: '360px' }}
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                )}
                                 <div className="flex items-center gap-2 px-4 py-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-light/40">Visual Lumi</span>
-                                  <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                                  <span className="text-[10px] text-emerald-400">Verified</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-light/40">
+                                    {img.media_type === 'youtube' ? '▶ Video' : img.media_type === 'gif' ? '✨ Animation' : '📸 Visual'}
+                                  </span>
+                                  {img.title && (
+                                    <>
+                                      <span className="h-1 w-1 rounded-full bg-white/20" />
+                                      <span className="text-[10px] text-slate-light/50 truncate max-w-[200px]">{img.title}</span>
+                                    </>
+                                  )}
+                                  <span className="ml-auto h-1 w-1 rounded-full bg-emerald-400" />
+                                  <span className="text-[10px] text-emerald-400">Lumi</span>
                                 </div>
-                              </div>
+                              </motion.div>
                             ))}
                           </div>
                         )}

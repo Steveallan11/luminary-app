@@ -5,8 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Send, Sparkles, Wand2, RefreshCw, ChevronRight, ChevronLeft,
   Edit3, Loader2, Check, MessageSquare, X, Plus, Trash2, Image as ImageIcon,
-  Video, Layers, BarChart2, Film, Smile, AlertCircle, Save, Zap,
+  Video, Layers, BarChart2, Film, Smile, AlertCircle, Save, Zap, BookOpen,
 } from 'lucide-react';
+import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type LessonPhase = 'spark' | 'explore' | 'anchor' | 'practise' | 'create' | 'check' | 'celebrate';
@@ -584,7 +585,7 @@ export default function AdminTestLessonPage() {
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId] = useState(() => `admin-test-${Date.now()}`);
-  const [adminPanelTab, setAdminPanelTab] = useState<'content' | 'refine' | 'variants' | 'notes' | 'report'>('content');
+  const [adminPanelTab, setAdminPanelTab] = useState<'content' | 'kb' | 'refine' | 'variants' | 'notes' | 'report'>('content');
   const [adminNotes, setAdminNotes] = useState<AdminNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [refinementInput, setRefinementInput] = useState('');
@@ -815,6 +816,7 @@ export default function AdminTestLessonPage() {
 
   const adminTabs = [
     { id: 'content', label: 'Content', icon: Layers },
+    { id: 'kb', label: 'Knowledge', icon: BookOpen },
     { id: 'refine', label: 'Refine', icon: Wand2 },
     { id: 'variants', label: 'Variants', icon: RefreshCw },
     { id: 'notes', label: 'Notes', icon: MessageSquare },
@@ -1007,6 +1009,16 @@ export default function AdminTestLessonPage() {
                 onMediaAdded={handleMediaAdded}
                 onMediaRemoved={(mediaId) => handleMediaRemoved(currentPhase, mediaId)}
               />
+            )}
+
+            {/* ── Knowledge Base Tab ── */}
+            {adminPanelTab === 'kb' && (
+              <div className="-m-4">
+                <KnowledgeBasePanel
+                  lessonId={lessonId}
+                  topicTitle={topicTitle}
+                />
+              </div>
             )}
 
             {/* ── Refine Tab ── */}

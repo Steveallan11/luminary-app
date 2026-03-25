@@ -82,37 +82,75 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-// Keep the GET endpoint for backward compatibility
+// GET endpoint — used by parent dashboard download button
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const childId = searchParams.get('child_id') || 'child-1';
+  try {
+    const { searchParams } = new URL(request.url);
+    const childId = searchParams.get('child_id') || 'child-1';
+    const period = searchParams.get('period') || 'term';
 
-  // Redirect to POST behavior with defaults
-  const child = MOCK_CHILDREN.find((c) => c.id === childId) || MOCK_CHILD;
-  const reportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const child = MOCK_CHILDREN.find((c) => c.id === childId) || MOCK_CHILD;
 
-  const html = buildLAReportHTML({
-    child,
-    reportDate,
-    periodStart: new Date(Date.now() - 90 * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-    periodLabel: 'Termly',
-    totalTimeStr: '9h 21m',
-    totalSessions: 28,
-    completedTopics: 14,
-    subjectData: [
-      { name: 'Maths', icon: '🔢', completed: 3, total: 5, percent: 78, hasActivity: true, sessionCount: 12, subjectTimeStr: '4h 15m' },
-      { name: 'History', icon: '🏛️', completed: 4, total: 5, percent: 89, hasActivity: true, sessionCount: 8, subjectTimeStr: '3h 5m' },
-      { name: 'English', icon: '📖', completed: 3, total: 4, percent: 82, hasActivity: true, sessionCount: 8, subjectTimeStr: '2h 1m' },
-    ],
-    strongest: ['History', 'English', 'Maths'],
-    developing: ['Maths'],
-  });
+    // Gather real mock data
+    const childSessions = MOCK_SESSIONS.filter((s) => s.child_id === child.id);
+    const periodDays = period === 'month' ? 30 : period === 'year' ? 365 : 90;
+    const cutoff = Date.now() - periodDays * 86400000;
+    const recentSessions = childSessions.filter(
+      (s) => new Date(s.started_at).getTime() > cutoff
+    );
+    const totalMinutes = recentSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = totalMinutes % 60;
+    const totalTimeStr = `${totalHours}h ${remainingMinutes}m`;
 
-  return new NextResponse(html, {
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-    },
-  });
+    const subjectData = MOCK_SUBJECTS.map((subject) => {
+      const topics = MOCK_TOPICS[subject.slug] || [];
+      const progress = MOCK_TOPIC_PROGRESS[subject.slug] || {};
+      const completed = Object.values(progress).filter((t) => t.status === 'completed').length;
+      const total = topics.length;
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const hasActivity = Object.values(progress).some((t) => t.status !== 'locked');
+      const subjectSessions = recentSessions.filter((s) => {
+        const topic = topics.find((t) => t.id === s.topic_id);
+        return !!topic;
+      });
+      const sessionCount = subjectSessions.length;
+      const subjectMinutes = subjectSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+      const subjectTimeStr = `${Math.floor(subjectMinutes / 60)}h ${subjectMinutes % 60}m`;
+      return { name: subject.name, icon: subject.icon_emoji, completed, total, percent, hasActivity, sessionCount, subjectTimeStr };
+    }).filter((s) => s.hasActivity);
+
+    const sorted = [...subjectData].sort((a, b) => b.percent - a.percent);
+    const strongest = sorted.slice(0, 3).map((s) => s.name);
+    const developing = sorted.slice(-3).map((s) => s.name);
+    const reportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const periodLabel = period === 'month' ? 'Monthly' : period === 'year' ? 'Annual' : 'Termly';
+    const periodStart = new Date(Date.now() - periodDays * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const completedTopics = subjectData.reduce((sum, s) => sum + s.completed, 0);
+
+    const html = buildLAReportHTML({
+      child,
+      reportDate,
+      periodStart,
+      periodLabel,
+      totalTimeStr,
+      totalSessions: recentSessions.length,
+      completedTopics,
+      subjectData,
+      strongest,
+      developing,
+    });
+
+    return new NextResponse(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Disposition': `inline; filename="Luminary-LA-Report-${child.name.replace(/ /g, '-')}-${new Date().toISOString().split('T')[0]}.html"`,
+      },
+    });
+  } catch (error) {
+    console.error('Report GET error:', error);
+    return NextResponse.json({ error: 'Failed to generate report' }, { status: 500 });
+  }
 }
 
 interface ReportParams {

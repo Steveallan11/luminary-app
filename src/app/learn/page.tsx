@@ -1,23 +1,87 @@
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Flame, Zap, Clock } from 'lucide-react';
+import { Flame, Zap, Clock, Loader2 } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import SubjectCard from '@/components/child/SubjectCard';
 import { MOCK_SUBJECTS, MOCK_CHILD, MOCK_SESSIONS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { getGreeting, formatTimeAgo } from '@/lib/utils';
 import { AVATAR_EMOJI_MAP } from '@/types';
+import type { Subject } from '@/types';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface SubjectData {
+  subjects: Subject[];
+  topics: Array<{ id: string; subject_id: string; slug: string }>;
+  progress: Record<string, Record<string, { status: string; mastery_score: number }>>;
+  source: 'supabase' | 'mock';
+}
+
+interface ChildData {
+  child: typeof MOCK_CHILD;
+  sessions: typeof MOCK_SESSIONS;
+  source: 'supabase' | 'mock';
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function getChildIdFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('luminary_child_id') || sessionStorage.getItem('luminary_child_id');
+}
 
 export default function LearnPage() {
-  const child = MOCK_CHILD;
+  const [subjectData, setSubjectData] = useState<SubjectData | null>(null);
+  const [childData, setChildData] = useState<ChildData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Calculate completed topics per subject
+  useEffect(() => {
+    const childId = getChildIdFromStorage();
+    const params = childId ? `?child_id=${childId}` : '';
+
+    Promise.all([
+      fetch(`/api/learn/subjects${params}`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/learn/child-profile${params}`).then((r) => r.json()).catch(() => null),
+    ]).then(([sData, cData]) => {
+      setSubjectData(sData || {
+        subjects: MOCK_SUBJECTS,
+        topics: [],
+        progress: MOCK_TOPIC_PROGRESS as any,
+        source: 'mock',
+      });
+      setChildData(cData || {
+        child: MOCK_CHILD,
+        sessions: MOCK_SESSIONS,
+        source: 'mock',
+      });
+      setIsLoading(false);
+    });
+  }, []);
+
+  const child = childData?.child || MOCK_CHILD;
+  const subjects = subjectData?.subjects || MOCK_SUBJECTS;
+  const progress = subjectData?.progress || (MOCK_TOPIC_PROGRESS as any);
+  const sessions = childData?.sessions || MOCK_SESSIONS;
+
   const getSubjectProgress = (slug: string) => {
-    const progress = MOCK_TOPIC_PROGRESS[slug];
-    if (!progress) return { completed: 0, total: 5 };
-    const completed = Object.values(progress).filter(s => s.status === 'completed').length;
-    return { completed, total: Object.keys(progress).length };
+    const subjectProgress = progress[slug];
+    if (!subjectProgress) return { completed: 0, total: 5 };
+    const completed = Object.values(subjectProgress).filter((s: any) => s.status === 'completed').length;
+    return { completed, total: Object.keys(subjectProgress).length || 5 };
   };
+
+  if (isLoading) {
+    return (
+      <ChildLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 size={32} className="text-amber animate-spin mx-auto mb-3" />
+            <p className="text-slate-light/60 text-sm">Loading your learning world...</p>
+          </div>
+        </div>
+      </ChildLayout>
+    );
+  }
 
   return (
     <ChildLayout>
@@ -31,7 +95,7 @@ export default function LearnPage() {
         >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-amber/10 flex items-center justify-center text-2xl">
-              {AVATAR_EMOJI_MAP[child.avatar]}
+              {AVATAR_EMOJI_MAP[child.avatar] || '🌟'}
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">{child.name}</h2>
@@ -71,15 +135,15 @@ export default function LearnPage() {
 
         {/* Subject cards grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-10">
-          {MOCK_SUBJECTS.map((subject, i) => {
-            const progress = getSubjectProgress(subject.slug);
+          {subjects.map((subject, i) => {
+            const prog = getSubjectProgress(subject.slug);
             return (
               <SubjectCard
                 key={subject.slug}
                 subject={subject}
                 index={i}
-                completedTopics={progress.completed}
-                totalTopics={progress.total}
+                completedTopics={prog.completed}
+                totalTopics={prog.total}
               />
             );
           })}
@@ -127,14 +191,14 @@ export default function LearnPage() {
               Recent XP
             </h3>
             <div className="space-y-3">
-              {MOCK_SESSIONS.slice(0, 3).map((session) => (
+              {sessions.slice(0, 3).map((session) => (
                 <div key={session.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-amber/10 flex items-center justify-center">
                       <Zap size={14} className="text-amber" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">{session.summary_text}</p>
+                      <p className="text-sm font-semibold text-white">{session.summary_text || 'Learning session'}</p>
                       <p className="text-xs text-slate-light/50 flex items-center gap-1">
                         <Clock size={10} />
                         {formatTimeAgo(session.started_at)}
@@ -144,6 +208,9 @@ export default function LearnPage() {
                   <span className="text-sm font-bold text-amber">+{session.xp_earned} XP</span>
                 </div>
               ))}
+              {sessions.length === 0 && (
+                <p className="text-sm text-slate-light/40 text-center py-4">No sessions yet — start learning!</p>
+              )}
             </div>
           </motion.div>
         </div>

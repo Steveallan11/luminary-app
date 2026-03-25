@@ -153,14 +153,40 @@ export function stripSignals(text: string): string {
 
 export interface ParsedImageSignal {
   url: string;
+  media_type?: 'image' | 'gif' | 'youtube';
+  title?: string;
 }
 
 export function parseImageSignals(text: string): ParsedImageSignal[] {
-  const matches = text.match(/\[IMAGE:(https?:\/\/[^\]]+)\]/g) ?? [];
-  return matches.map((match) => {
+  const results: ParsedImageSignal[] = [];
+
+  // [IMAGE:url] — standard image or GIF
+  const imageMatches = text.match(/\[IMAGE:(https?:\/\/[^\]]+)\]/g) ?? [];
+  for (const match of imageMatches) {
     const [, url] = match.match(/\[IMAGE:(https?:\/\/[^\]]+)\]/) ?? [];
-    return { url: url ?? '' };
-  }).filter((entry) => entry.url);
+    if (url) {
+      const isGif = url.toLowerCase().includes('.gif') || url.toLowerCase().includes('giphy');
+      results.push({ url, media_type: isGif ? 'gif' : 'image' });
+    }
+  }
+
+  // [YOUTUBE:videoId] — YouTube embed
+  const ytMatches = text.match(/\[YOUTUBE:([A-Za-z0-9_-]{6,15})\]/g) ?? [];
+  for (const match of ytMatches) {
+    const [, videoId] = match.match(/\[YOUTUBE:([A-Za-z0-9_-]{6,15})\]/) ?? [];
+    if (videoId) {
+      results.push({ url: `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`, media_type: 'youtube' });
+    }
+  }
+
+  // [GIF:url] — explicit GIF signal
+  const gifMatches = text.match(/\[GIF:(https?:\/\/[^\]]+)\]/g) ?? [];
+  for (const match of gifMatches) {
+    const [, url] = match.match(/\[GIF:(https?:\/\/[^\]]+)\]/) ?? [];
+    if (url) results.push({ url, media_type: 'gif' });
+  }
+
+  return results;
 }
 
 export function stripAllSignals(text: string): string {
@@ -168,6 +194,8 @@ export function stripAllSignals(text: string): string {
     .replace(/\[CONTENT:[^\]]+\]/g, '')
     .replace(/\[PHASE:[^\]]+\]/g, '')
     .replace(/\[IMAGE:[^\]]+\]/g, '')
+    .replace(/\[YOUTUBE:[^\]]+\]/g, '')
+    .replace(/\[GIF:[^\]]+\]/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

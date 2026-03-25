@@ -1,23 +1,63 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Check, Lock, Play, Clock, X, Star, Zap } from 'lucide-react';
+import { ArrowLeft, Check, Lock, Play, Clock, X, Star, Zap, Loader2 } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import Button from '@/components/ui/Button';
 import { MOCK_SUBJECTS, MOCK_TOPICS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { TopicStatus, Topic } from '@/types';
+import type { Subject } from '@/types';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function getChildIdFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('luminary_child_id') || sessionStorage.getItem('luminary_child_id');
+}
 
 export default function SubjectPage() {
   const params = useParams();
   const slug = params.slug as string;
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
+  const [subject, setSubject] = useState<Subject | null>(null);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [rawProgress, setRawProgress] = useState<Record<string, { status: TopicStatus; mastery_score: number }>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const subject = MOCK_SUBJECTS.find((s) => s.slug === slug);
-  const topics = MOCK_TOPICS[slug] || [];
-  const rawProgress = MOCK_TOPIC_PROGRESS[slug] || {};
+  useEffect(() => {
+    const childId = getChildIdFromStorage();
+    const params = childId ? `?child_id=${childId}` : '';
+
+    fetch(`/api/learn/subjects${params}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const foundSubject = (data.subjects || MOCK_SUBJECTS).find((s: Subject) => s.slug === slug);
+        setSubject(foundSubject || MOCK_SUBJECTS.find((s) => s.slug === slug) || null);
+
+        const allTopics = data.topics || Object.values(MOCK_TOPICS).flat();
+        const subjectTopics = allTopics
+          .filter((t: Topic) => {
+            if (foundSubject) return t.subject_id === foundSubject.id;
+            return (MOCK_TOPICS[slug] || []).some((mt) => mt.id === t.id);
+          })
+          .sort((a: Topic, b: Topic) => (a.order_index || 0) - (b.order_index || 0));
+
+        setTopics(subjectTopics.length > 0 ? subjectTopics : MOCK_TOPICS[slug] || []);
+
+        const subjectProgress = data.progress?.[slug] || MOCK_TOPIC_PROGRESS[slug] || {};
+        setRawProgress(subjectProgress as any);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        // Full fallback to mock data
+        setSubject(MOCK_SUBJECTS.find((s) => s.slug === slug) || null);
+        setTopics(MOCK_TOPICS[slug] || []);
+        setRawProgress((MOCK_TOPIC_PROGRESS[slug] || {}) as any);
+        setIsLoading(false);
+      });
+  }, [slug]);
 
   // Build data-driven progress with sequential unlock logic
   const topicProgress = useMemo(() => {
@@ -27,7 +67,6 @@ export default function SubjectPage() {
       if (raw) {
         result[topic.slug] = raw;
       } else {
-        // Sequential unlock: first topic always available, rest locked until previous completed
         if (i === 0) {
           result[topic.slug] = { status: 'available', mastery_score: 0 };
         } else {
@@ -42,6 +81,19 @@ export default function SubjectPage() {
     });
     return result;
   }, [topics, rawProgress]);
+
+  if (isLoading) {
+    return (
+      <ChildLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 size={32} className="text-amber animate-spin mx-auto mb-3" />
+            <p className="text-slate-light/60 text-sm">Loading subject...</p>
+          </div>
+        </div>
+      </ChildLayout>
+    );
+  }
 
   if (!subject) {
     return (
@@ -174,7 +226,6 @@ export default function SubjectPage() {
               const styles = getNodeStyles(status);
               const isClickable = status !== 'locked';
 
-              // Connection line colour
               const prevCompleted = i > 0 && topicProgress[topics[i - 1].slug]?.status === 'completed';
 
               return (
@@ -291,75 +342,46 @@ export default function SubjectPage() {
                   {subject.icon_emoji}
                 </div>
 
-                <h2
-                  className="text-2xl font-bold text-white mb-2"
-                  style={{ fontFamily: 'var(--font-display)' }}
-                >
+                <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
                   {selectedTopic.title}
                 </h2>
+                <p className="text-slate-light/60 mb-4">{selectedTopic.description}</p>
 
-                <p className="text-slate-light/70 mb-4">{selectedTopic.description}</p>
+                <div className="flex items-center gap-4 mb-6 text-sm text-slate-light/50">
+                  <span className="flex items-center gap-1">
+                    <Clock size={14} />
+                    {selectedTopic.estimated_minutes} minutes
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Zap size={14} className="text-amber" />
+                    +{selectedTopic.estimated_minutes * 3} XP
+                  </span>
+                </div>
 
-                {/* Mastery info */}
-                {selectedStatus && selectedStatus.mastery_score > 0 && (
-                  <div className="rounded-xl bg-navy/40 border border-white/10 p-3 mb-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-slate-light/60">Mastery</span>
-                      <span className="text-xs font-bold" style={{ color: subject.colour_hex }}>
-                        {selectedStatus.mastery_score}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${selectedStatus.mastery_score}%`,
-                          backgroundColor: subject.colour_hex,
-                        }}
-                      />
-                    </div>
+                {selectedStatus && selectedStatus.status === 'completed' && (
+                  <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-sm font-semibold text-emerald-400">
+                      ✅ Completed — {selectedStatus.mastery_score}% mastery
+                    </p>
                   </div>
                 )}
 
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-center gap-3 text-sm">
-                    <Clock size={16} className="text-slate-light/50" />
-                    <span className="text-slate-light/70">About {selectedTopic.estimated_minutes} minutes</span>
+                {isSelectedClickable ? (
+                  <Link href={`/learn/${slug}/${selectedTopic.slug}`}>
+                    <Button
+                      variant="primary"
+                      className="w-full"
+                      style={{ backgroundColor: subject.colour_hex, borderColor: subject.colour_hex }}
+                    >
+                      {selectedStatus?.status === 'completed' ? '🔄 Revisit Topic' : '🚀 Start Learning'}
+                    </Button>
+                  </Link>
+                ) : (
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                    <Lock size={20} className="text-slate-light/30 mx-auto mb-2" />
+                    <p className="text-sm text-slate-light/40">Complete the previous topic to unlock</p>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Star size={16} className="text-slate-light/50" />
-                    <span className="text-slate-light/70">Key Stage: {selectedTopic.key_stage}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Zap size={16} className="text-amber" />
-                    <span className="text-slate-light/70">Earn up to 50 XP</span>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-navy/40 border border-white/10 p-5 mb-6">
-                  <h3 className="text-sm font-bold text-white mb-2">What you&apos;ll learn</h3>
-                  <ul className="space-y-2 text-sm text-slate-light/70">
-                    <li className="flex items-start gap-2">
-                      <Check size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Core concepts and key vocabulary</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Interactive activities with Lumi</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Practice questions and challenges</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <Link href={`/learn/${slug}/${selectedTopic.slug}`}>
-                  <Button variant="primary" size="lg" className="w-full gap-2">
-                    {selectedStatus?.status === 'completed' ? 'Review with Lumi' : selectedStatus?.status === 'in_progress' ? 'Continue with Lumi' : 'Start with Lumi'}
-                    <ArrowLeft size={18} className="rotate-180" />
-                  </Button>
-                </Link>
+                )}
               </div>
             </motion.div>
           </>
