@@ -8,6 +8,7 @@ import {
   Video, Layers, BarChart2, Film, Smile, AlertCircle, Save, Zap, BookOpen,
 } from 'lucide-react';
 import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
+import ContentLinker from '@/components/admin/ContentLinker';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type LessonPhase = 'spark' | 'explore' | 'anchor' | 'practise' | 'create' | 'check' | 'celebrate';
@@ -597,6 +598,8 @@ export default function AdminTestLessonPage() {
   const [variantSuccess, setVariantSuccess] = useState<string | null>(null);
   const [knowledgeBase, setKnowledgeBase] = useState<any[]>([]);
   const [phaseMedia, setPhaseMedia] = useState<Record<string, PhaseMedia[]>>({});
+  const [linkedContent, setLinkedContent] = useState<any[]>([]);
+  const [showContentLinker, setShowContentLinker] = useState(false);
   const [engagementScore, setEngagementScore] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -650,6 +653,8 @@ export default function AdminTestLessonPage() {
         }
         setPhaseMedia(byPhase);
       }).catch(() => {});
+    fetch(`/api/admin/lesson-content-links?lesson_id=${lessonId}`)
+      .then(r => r.json()).then(d => setLinkedContent(d.links || [])).catch(() => {});
   }, [lessonId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -700,7 +705,7 @@ export default function AdminTestLessonPage() {
       const systemPrompt = buildAdminTestSystemPrompt({
         topicTitle, subjectName, ageGroup: lesson.age_group, keyStage: lesson.key_stage,
         currentPhase, phaseData, lessonStructure: lesson, knowledgeBase,
-        phaseMedia: currentPhaseMedia,
+        phaseMedia: currentPhaseMedia, linkedContent,
       });
       const response = await fetch('/api/lumi/chat', {
         method: 'POST',
@@ -1000,15 +1005,80 @@ export default function AdminTestLessonPage() {
           <div className="flex-1 overflow-y-auto p-4">
             {/* ── Content Tab ── */}
             {adminPanelTab === 'content' && (
-              <PhaseContentPanel
-                lessonId={lessonId} phase={currentPhase}
-                phaseData={currentPhaseData} phaseMedia={currentPhaseMedia}
-                topic={topicTitle} keyConcepts={lesson?.key_concepts || []}
-                ageGroup={lesson?.age_group || '8-11'}
-                onPhaseUpdated={handlePhaseUpdated}
-                onMediaAdded={handleMediaAdded}
-                onMediaRemoved={(mediaId) => handleMediaRemoved(currentPhase, mediaId)}
-              />
+              <div className="space-y-4">
+                <PhaseContentPanel
+                  lessonId={lessonId} phase={currentPhase}
+                  phaseData={currentPhaseData} phaseMedia={currentPhaseMedia}
+                  topic={topicTitle} keyConcepts={lesson?.key_concepts || []}
+                  ageGroup={lesson?.age_group || '8-11'}
+                  onPhaseUpdated={handlePhaseUpdated}
+                  onMediaAdded={handleMediaAdded}
+                  onMediaRemoved={(mediaId) => handleMediaRemoved(currentPhase, mediaId)}
+                />
+                {/* ── Linked Content Assets ── */}
+                <div className="border-t border-white/10 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs font-bold text-white">Linked Content</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Concept cards, games &amp; worksheets for this phase</p>
+                    </div>
+                    <button
+                      onClick={() => setShowContentLinker(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-black text-xs font-bold hover:bg-amber-400 transition-all"
+                    >
+                      <Plus size={12} /> Insert Content
+                    </button>
+                  </div>
+                  {(() => {
+                    const phaseLinks = linkedContent.filter((l: any) => l.phase === currentPhase);
+                    if (phaseLinks.length === 0) return (
+                      <div className="p-4 rounded-xl border border-dashed border-white/10 text-center">
+                        <p className="text-xs text-slate-600">No content linked to this phase yet</p>
+                        <p className="text-[10px] text-slate-700 mt-1">Click &quot;Insert Content&quot; to add concept cards, games, or worksheets</p>
+                      </div>
+                    );
+                    return (
+                      <div className="space-y-2">
+                        {phaseLinks.map((link: any) => {
+                          const asset = link.asset;
+                          const typeIcons: Record<string, string> = {
+                            concept_card: '📚', game_questions: '🎮', worksheet: '📝', realworld_card: '🌍',
+                          };
+                          const typeColours: Record<string, string> = {
+                            concept_card: 'text-blue-400 bg-blue-400/10', game_questions: 'text-amber-400 bg-amber-400/10',
+                            worksheet: 'text-emerald-400 bg-emerald-400/10', realworld_card: 'text-purple-400 bg-purple-400/10',
+                          };
+                          const icon = typeIcons[asset?.asset_type] || '📄';
+                          const colour = typeColours[asset?.asset_type] || 'text-slate-400 bg-slate-400/10';
+                          return (
+                            <div key={link.id} className="flex items-start gap-3 p-3 rounded-xl border border-white/10 bg-white/5">
+                              <span className="text-lg shrink-0">{icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-white truncate">{asset?.title || 'Unknown asset'}</p>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${colour}`}>
+                                  {asset?.asset_type?.replace(/_/g, ' ') || 'asset'}
+                                </span>
+                                {link.lumi_instruction && (
+                                  <p className="text-[10px] text-slate-500 mt-1 italic line-clamp-2">&ldquo;{link.lumi_instruction}&rdquo;</p>
+                                )}
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  await fetch(`/api/admin/lesson-content-links?id=${link.id}`, { method: 'DELETE' });
+                                  setLinkedContent(prev => prev.filter((l: any) => l.id !== link.id));
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-600 hover:text-red-400 transition-colors shrink-0"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
             )}
 
             {/* ── Knowledge Base Tab ── */}
@@ -1251,6 +1321,19 @@ export default function AdminTestLessonPage() {
           </div>
         </div>
       </div>
+
+      {/* ── ContentLinker Modal ── */}
+      {showContentLinker && lesson && (
+        <ContentLinker
+          lessonId={lessonId}
+          lessonTitle={topicTitle}
+          currentPhase={currentPhase}
+          onClose={() => setShowContentLinker(false)}
+          onLinked={(newLink) => {
+            setLinkedContent(prev => [...prev.filter((l: any) => l.id !== newLink.id), newLink]);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1294,11 +1377,11 @@ function formatPhaseForLumi(phaseName: string, phaseData: any): string {
 
 function buildAdminTestSystemPrompt({
   topicTitle, subjectName, ageGroup, keyStage, currentPhase, phaseData,
-  lessonStructure, knowledgeBase = [], phaseMedia = [],
+  lessonStructure, knowledgeBase = [], phaseMedia = [], linkedContent = [],
 }: {
   topicTitle: string; subjectName: string; ageGroup: string; keyStage: string;
   currentPhase: string; phaseData: any; lessonStructure: any;
-  knowledgeBase?: any[]; phaseMedia?: PhaseMedia[];
+  knowledgeBase?: any[]; phaseMedia?: PhaseMedia[]; linkedContent?: any[];
 }): string {
   const ageCalibration = getAgeCalibration(ageGroup);
   const phaseOrder = ['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'];
@@ -1311,6 +1394,21 @@ function buildAdminTestSystemPrompt({
   }).join('\n');
   const mediaContext = phaseMedia.length > 0
     ? `\nMEDIA AVAILABLE FOR THIS PHASE (reference these to make the lesson visual):\n${phaseMedia.map((m, i) => `[${i + 1}] ${m.media_type.toUpperCase()}: "${m.title}" — ${m.lumi_instruction}`).join('\n')}`
+    : '';
+  const phaseLinkedAssets = linkedContent.filter((l: any) => l.phase === currentPhase);
+  const linkedContentContext = phaseLinkedAssets.length > 0
+    ? `\nLINKED CONTENT ASSETS FOR THIS PHASE (use these at the right moment in the lesson):\n${phaseLinkedAssets.map((l: any, i: number) => {
+        const asset = l.asset;
+        if (!asset) return `[${i + 1}] Unknown asset`;
+        const typeLabel = { concept_card: 'CONCEPT CARD', game_questions: 'INTERACTIVE GAME', worksheet: 'WORKSHEET', realworld_card: 'REAL WORLD CARD' }[asset.asset_type as string] || asset.asset_type;
+        let desc = `[${i + 1}] ${typeLabel}: "${asset.title}"`;
+        if (l.lumi_instruction) desc += `\n    → When to use: ${l.lumi_instruction}`;
+        if (asset.asset_type === 'game_questions') desc += `\n    → Signal to child: [CONTENT:game:${asset.id}] — this will launch an interactive game`;
+        if (asset.asset_type === 'concept_card') desc += `\n    → Signal to child: [CONTENT:card:${asset.id}] — this will show a visual concept card`;
+        if (asset.asset_type === 'worksheet') desc += `\n    → Signal to child: [CONTENT:worksheet:${asset.id}] — this will show a printable worksheet`;
+        if (asset.asset_type === 'realworld_card') desc += `\n    → Signal to child: [CONTENT:realworld:${asset.id}] — this will show a real-world connection card`;
+        return desc;
+      }).join('\n\n')}`
     : '';
   const kbContext = knowledgeBase.filter(kb => kb.is_active).length > 0
     ? `\nKNOWLEDGE BASE (use to enrich your teaching):\n${knowledgeBase.filter(kb => kb.is_active).map((kb, i) => {
@@ -1350,6 +1448,7 @@ ${upcomingPhases.length > 0 ? `Upcoming phases: ${upcomingPhases.join(', ')}` : 
 
 ${formatPhaseForLumi(currentPhase, phaseData)}
 ${mediaContext}
+${linkedContentContext}
 ${kbContext}
 
 TEACHING INSTRUCTIONS:

@@ -67,6 +67,7 @@ export async function GET() {
     admin_test_sessions: await tableExists('admin_test_sessions'),
     topic_assets: await tableExists('topic_assets'),
     lesson_phase_media: await tableExists('lesson_phase_media'),
+    lesson_content_links: await tableExists('lesson_content_links'),
   };
 
   return NextResponse.json({ tables });
@@ -80,14 +81,16 @@ export async function POST() {
   const sessionsExists = await tableExists('admin_test_sessions');
   const assetsExists = await tableExists('topic_assets');
   const mediaExists = await tableExists('lesson_phase_media');
+  const contentLinksExists = await tableExists('lesson_content_links');
 
   results.push({ name: 'lesson_knowledge_base', status: kbExists ? 'already_exists' : 'needs_creation', exists: kbExists });
   results.push({ name: 'admin_test_sessions', status: sessionsExists ? 'already_exists' : 'needs_creation', exists: sessionsExists });
   results.push({ name: 'topic_assets', status: assetsExists ? 'exists' : 'missing', exists: assetsExists });
   results.push({ name: 'lesson_phase_media', status: mediaExists ? 'already_exists' : 'needs_creation', exists: mediaExists });
+  results.push({ name: 'lesson_content_links', status: contentLinksExists ? 'already_exists' : 'needs_creation', exists: contentLinksExists });
 
   // Try to create missing tables using raw SQL via the Supabase REST API
-  if (!kbExists || !sessionsExists || !mediaExists) {
+  if (!kbExists || !sessionsExists || !mediaExists || !contentLinksExists) {
     const sql = `
       ${!kbExists ? `CREATE TABLE IF NOT EXISTS lesson_knowledge_base (
         id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -133,6 +136,16 @@ export async function POST() {
         phase_text_override jsonb,
         is_active boolean DEFAULT true,
         created_at timestamptz DEFAULT now()
+      );` : ''}
+      ${!contentLinksExists ? `CREATE TABLE IF NOT EXISTS lesson_content_links (
+        id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+        lesson_id uuid NOT NULL REFERENCES topic_lesson_structures(id) ON DELETE CASCADE,
+        asset_id uuid NOT NULL REFERENCES topic_assets(id) ON DELETE CASCADE,
+        phase text NOT NULL,
+        position integer DEFAULT 0,
+        lumi_instruction text,
+        created_at timestamptz DEFAULT now(),
+        UNIQUE(lesson_id, asset_id, phase)
       );` : ''}
     `;
 
