@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateAgentTask } from '@/lib/agents/queries';
+import { getServiceSupabaseClient, updateAgentTask } from '@/lib/agents/queries';
+import { executeTaskOnStart } from '@/lib/agents/task-executors';
 
 export async function PATCH(
   request: NextRequest,
@@ -16,6 +17,21 @@ export async function PATCH(
 
     if (!task) {
       return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
+    }
+
+    if (body.status === 'in_progress') {
+      const supabase = getServiceSupabaseClient();
+      const { data } = supabase
+        ? await supabase.from('agent_tasks').select('*').eq('id', params.id).single()
+        : { data: task };
+
+      const latestTask = (data as typeof task | null) ?? task;
+      const execution = await executeTaskOnStart(latestTask);
+
+      return NextResponse.json({
+        task: latestTask,
+        execution,
+      });
     }
 
     return NextResponse.json(task);

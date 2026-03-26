@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric } from '@/types/agents';
 
+export function getServiceSupabaseClient() {
+  return getServiceSupabase();
+}
+
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
