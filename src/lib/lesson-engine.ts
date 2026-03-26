@@ -135,18 +135,6 @@ export function startLessonForChild(subjectSlug: string, topicSlug: string, chil
   };
 }
 
-  return {
-    state: 'live',
-    topic,
-    ageGroup,
-    structure,
-    sessionId,
-    phase: 'spark',
-    openingPrompt: structure.spark_json?.opening_question ?? `What do you already know about ${topic.title}?`,
-    contentManifest: buildContentManifest(topic.id),
-  };
-}
-
 export function generateLessonEnvelope(subjectSlug: string, topicSlug: string): GeneratedLessonEnvelope | null {
   const topic = findTopicBySlug(subjectSlug, topicSlug);
   if (!topic) return null;
