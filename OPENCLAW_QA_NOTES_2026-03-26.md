@@ -84,15 +84,40 @@ Observed in `src/app/auth/login/page.tsx`:
 
 ---
 
+### 4. App mixes mock-backed production UI with partially real routing/auth expectations
+**Severity:** High
+**Area:** Product architecture / launch readiness
+
+Confirmed in code review:
+- `src/app/parent/page.tsx` uses `MOCK_CHILDREN`, `MOCK_SUBJECTS`, `MOCK_SESSIONS`, `MOCK_TOPIC_PROGRESS`, `MOCK_TOPICS`, `MOCK_FAMILY`
+- `src/app/learn/page.tsx` fetches APIs but silently falls back to mock data
+- `src/app/auth/login/page.tsx` uses hardcoded demo children, any-4-digit PIN behavior, parent timeout login, and admin test-email mode
+- `src/app/admin/layout.tsx` expects real admin auth and redirects accordingly
+
+**Why it matters:**
+- the app can look more production-ready than it really is
+- founder/operator can misread mocked success as real system health
+- QA becomes ambiguous because some flows are genuinely implemented and others are simulated
+- launch readiness is hard to judge until demo vs real behavior is made explicit
+
+**Suggested fix:**
+- clearly define which routes are demo-backed vs production-backed
+- gate mock/demo behavior behind explicit flags or demo mode
+- avoid silent fallback to mock data in routes meant to represent production readiness
+- create a short route-by-route readiness matrix
+
+---
+
 ## Recommended Priority Order
 
 1. Fix public placeholder links on homepage
 2. Improve learner login wording
 3. Audit auth flow for demo-only logic vs production logic
-4. Continue QA into signup, post-auth routes, and protected pages
+4. Create a route-by-route readiness matrix (real vs mock vs hybrid)
+5. Continue QA into signup, post-auth routes, and protected pages
 
 ---
 
 ## Notes
-This is a first-pass QA list, not a full product audit.
-More issues will likely emerge once child/parent/admin flows are tested deeper.
+This is an early QA list, not a full product audit.
+A major theme emerging now is **mock/real boundary clarity**. More issues will likely emerge once child/parent/admin flows are tested deeper.
