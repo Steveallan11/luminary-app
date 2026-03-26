@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { AgentLog, AgentTask, AgentTaskDraft, BusinessMetric } from '@/types/agents';
+import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric } from '@/types/agents';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,16 +49,22 @@ export async function getRecentAgentLogs(limit = 10): Promise<AgentLog[]> {
   return (data as AgentLog[]) ?? [];
 }
 
-export async function getOpenAgentTasks(limit = 20): Promise<AgentTask[]> {
+export async function getOpenAgentTasks(limit = 20, agentName?: AgentName): Promise<AgentTask[]> {
   const supabase = getServiceSupabase();
   if (!supabase) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('agent_tasks')
     .select('*')
     .in('status', ['pending', 'in_progress', 'blocked'])
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  if (agentName) {
+    query = query.eq('agent_name', agentName);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.warn('Failed to fetch agent tasks:', error.message);
@@ -66,6 +72,44 @@ export async function getOpenAgentTasks(limit = 20): Promise<AgentTask[]> {
   }
 
   return (data as AgentTask[]) ?? [];
+}
+
+export async function updateAgentTask(taskId: string, updates: {
+  status?: AgentTaskStatus;
+  owner?: string | null;
+  priority?: AgentTask['priority'];
+}): Promise<AgentTask | null> {
+  const supabase = getServiceSupabase();
+  if (!supabase) return null;
+
+  const patch: Record<string, unknown> = {};
+
+  if (typeof updates.status === 'string') {
+    patch.status = updates.status;
+    patch.completed_at = updates.status === 'done' ? new Date().toISOString() : null;
+  }
+
+  if (typeof updates.owner === 'string' || updates.owner === null) {
+    patch.owner = updates.owner;
+  }
+
+  if (typeof updates.priority === 'string') {
+    patch.priority = updates.priority;
+  }
+
+  const { data, error } = await supabase
+    .from('agent_tasks')
+    .update(patch)
+    .eq('id', taskId)
+    .select('*')
+    .single();
+
+  if (error) {
+    console.warn('Failed to update agent task:', error.message);
+    return null;
+  }
+
+  return (data as AgentTask) ?? null;
 }
 
 export async function insertAgentLog(log: {

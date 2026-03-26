@@ -1,6 +1,7 @@
 import { BarChart3, Bot, Clock3, ShieldAlert, Wrench } from 'lucide-react';
 import { getCeoDashboard } from '@/lib/agents/run-ceo';
 import { CeoActionBar } from '@/components/admin/CeoActionBar';
+import { TaskActionButtons } from '@/components/admin/TaskActionButtons';
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -145,8 +146,10 @@ export default async function AdminCeoPage() {
                   <div>
                     <p className="font-semibold text-white">{task.title}</p>
                     {task.description && <p className="mt-1 text-sm text-slate-light/60">{task.description}</p>}
+                    <TaskActionButtons taskId={task.id} currentStatus={task.status} />
                   </div>
                   <div className="text-right text-xs text-slate-light/50">
+                    <p>{task.agent_name}</p>
                     <p>{task.priority}</p>
                     <p>{task.status}</p>
                   </div>
