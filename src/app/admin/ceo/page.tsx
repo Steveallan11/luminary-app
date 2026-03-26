@@ -1,5 +1,6 @@
-import { BarChart3, Bot, Clock3, PlayCircle, ShieldAlert, DatabaseZap } from 'lucide-react';
+import { BarChart3, Bot, Clock3, ShieldAlert } from 'lucide-react';
 import { getCeoDashboard } from '@/lib/agents/run-ceo';
+import { CeoActionBar } from '@/components/admin/CeoActionBar';
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -22,18 +23,7 @@ export default async function AdminCeoPage() {
             Founder operating view for priorities, logs, metrics, and next actions.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <form action="/api/agents/tasks/seed" method="post">
-            <button className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10">
-              <DatabaseZap size={16} /> Seed Starter Tasks
-            </button>
-          </form>
-          <form action="/api/agents/ceo/run" method="post">
-            <button className="inline-flex items-center gap-2 rounded-xl bg-amber px-4 py-2 text-sm font-bold text-navy transition hover:brightness-105">
-              <PlayCircle size={16} /> Run CEO Review
-            </button>
-          </form>
-        </div>
+        <CeoActionBar />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
