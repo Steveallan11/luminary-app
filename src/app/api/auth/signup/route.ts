@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const { email, password, familyName } = await request.json();
+    console.log('[v0] Signup attempt:', { email, familyName });
 
     if (!email || !password || !familyName) {
       return NextResponse.json(
@@ -12,7 +13,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check env vars are present
+    console.log('[v0] Supabase URL present:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('[v0] Supabase Anon Key present:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
     const supabase = await createServerSupabaseClient();
+    console.log('[v0] Supabase client created successfully');
+
+    const redirectUrl = process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+      `${request.headers.get('origin')}/auth/onboarding`;
+    console.log('[v0] Redirect URL:', redirectUrl);
 
     // Sign up with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -28,12 +38,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (authError) {
-      console.error('Signup error:', authError);
+      console.error('[v0] Supabase auth error:', authError.message, authError);
       return NextResponse.json(
         { error: authError.message },
         { status: 400 }
       );
     }
+
+    console.log('[v0] Auth signup successful:', { userId: authData.user?.id, hasSession: !!authData.session });
 
     if (!authData.user) {
       return NextResponse.json(

@@ -24,6 +24,7 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    console.log('[v0] Signup form submitted:', { email, familyName });
 
     try {
       const res = await fetch('/api/auth/signup', {
@@ -33,8 +34,10 @@ export default function SignupPage() {
       });
 
       const data = await res.json();
+      console.log('[v0] Signup response:', { ok: res.ok, status: res.status, data });
 
       if (!res.ok) {
+        console.log('[v0] Signup error:', data.error);
         setError(data.error || 'Something went wrong. Please try again.');
         return;
       }
