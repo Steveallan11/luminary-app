@@ -184,7 +184,7 @@ export default function LandingPage() {
       </section>
 
       {/* Subject Preview */}
-      <section className="relative z-10 px-4 sm:px-6 lg:px-8 py-20">
+      <section id="subjects" className="relative z-10 px-4 sm:px-6 lg:px-8 py-20">
         <div className="max-w-6xl mx-auto">
           <motion.div
             className="text-center mb-12"
@@ -317,24 +317,24 @@ export default function LandingPage() {
               <h4 className="text-sm font-bold text-white mb-3">Platform</h4>
               <ul className="space-y-2 text-sm text-slate-light/60">
                 <li><Link href="#features" className="hover:text-white transition-colors">Features</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Subjects</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Pricing</Link></li>
+                <li><a href="#subjects" className="hover:text-white transition-colors">Subjects</a></li>
+                <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-bold text-white mb-3">Support</h4>
               <ul className="space-y-2 text-sm text-slate-light/60">
-                <li><Link href="#" className="hover:text-white transition-colors">Help Centre</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Contact Us</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Community</Link></li>
+                <li><span className="text-slate-light/40">Help Centre (coming soon)</span></li>
+                <li><span className="text-slate-light/40">Contact Us (coming soon)</span></li>
+                <li><span className="text-slate-light/40">Community (coming soon)</span></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-bold text-white mb-3">Legal</h4>
               <ul className="space-y-2 text-sm text-slate-light/60">
-                <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Cookie Policy</Link></li>
+                <li><span className="text-slate-light/40">Privacy Policy (coming soon)</span></li>
+                <li><span className="text-slate-light/40">Terms of Service (coming soon)</span></li>
+                <li><span className="text-slate-light/40">Cookie Policy (coming soon)</span></li>
               </ul>
             </div>
           </div>

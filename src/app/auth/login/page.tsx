@@ -195,13 +195,18 @@ export default function LoginPage() {
 
               <form onSubmit={handleEmailSubmit} className="space-y-5">
                 <Input
-                  label={loginType === 'admin' ? 'Admin Email' : 'Parent\'s Email'}
+                  label={loginType === 'admin' ? 'Admin Email' : loginType === 'child' ? 'Parent Email for Learner Login' : 'Parent Email'}
                   type="email"
                   placeholder={loginType === 'admin' ? ADMIN_TEST_EMAIL : 'parent@example.com'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
+                {loginType === 'child' && (
+                  <p className="-mt-2 text-sm text-slate-light/60">
+                    Start with your parent&apos;s email, then choose your learner profile and enter your PIN.
+                  </p>
+                )}
                 <Button type="submit" variant="primary" size="lg" className="w-full gap-2">
                   Continue <ArrowRight size={18} />
                 </Button>
