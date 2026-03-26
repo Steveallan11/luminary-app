@@ -12,6 +12,20 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function statusBadgeClasses(status: string) {
+  if (status === 'done') return 'bg-emerald-500/15 text-emerald-300';
+  if (status === 'in_progress') return 'bg-sky-500/15 text-sky-300';
+  if (status === 'blocked') return 'bg-rose-500/15 text-rose-300';
+  return 'bg-white/10 text-slate-light/70';
+}
+
+function priorityBadgeClasses(priority: string) {
+  if (priority === 'critical') return 'bg-rose-500/15 text-rose-300';
+  if (priority === 'high') return 'bg-amber/15 text-amber-light';
+  if (priority === 'medium') return 'bg-sky-500/15 text-sky-300';
+  return 'bg-white/10 text-slate-light/70';
+}
+
 export default async function AdminCeoPage() {
   const dashboard = await getCeoDashboard();
 
@@ -144,14 +158,21 @@ export default async function AdminCeoPage() {
               <div key={task.id} className="rounded-xl border border-white/10 bg-navy/40 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-white">{task.title}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-white">{task.title}</p>
+                      <span className={['rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em]', priorityBadgeClasses(task.priority)].join(' ')}>
+                        {task.priority}
+                      </span>
+                      <span className={['rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em]', statusBadgeClasses(task.status)].join(' ')}>
+                        {task.status.replace('_', ' ')}
+                      </span>
+                    </div>
                     {task.description && <p className="mt-1 text-sm text-slate-light/60">{task.description}</p>}
                     <TaskActionButtons taskId={task.id} currentStatus={task.status} />
                   </div>
                   <div className="text-right text-xs text-slate-light/50">
                     <p>{task.agent_name}</p>
-                    <p>{task.priority}</p>
-                    <p>{task.status}</p>
+                    <p>{new Date(task.created_at).toLocaleString()}</p>
                   </div>
                 </div>
               </div>

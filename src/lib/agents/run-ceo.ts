@@ -1,6 +1,7 @@
 import type { AgentLog, AgentName, AgentOutput, AgentSeverity, AgentStatusSummary, CeoDashboardData } from '@/types/agents';
 import { getLatestBusinessMetric, getOpenAgentTasks, getRecentAgentLogs, insertAgentLog, insertAgentTasks } from '@/lib/agents/queries';
 import { runProductTechReview } from '@/lib/agents/run-product-tech';
+import { runContentCurriculumReview } from '@/lib/agents/run-content-curriculum';
 import { runGrowthReview } from '@/lib/agents/run-growth';
 import { runSupportSuccessReview } from '@/lib/agents/run-support-success';
 
@@ -104,6 +105,7 @@ export async function runCeoReview(): Promise<{ output: AgentOutput; dashboard: 
 
   const specialistRuns = await Promise.all([
     runProductTechReview(),
+    runContentCurriculumReview(),
     runGrowthReview(),
     runSupportSuccessReview(),
   ]);
@@ -148,8 +150,9 @@ export async function runCeoReview(): Promise<{ output: AgentOutput; dashboard: 
       ...output,
       delegated_runs: [
         { agent_name: 'product_tech', created_tasks_count: specialistRuns[0]?.createdTasks.length ?? 0 },
-        { agent_name: 'growth', created_tasks_count: specialistRuns[1]?.createdTasks.length ?? 0 },
-        { agent_name: 'support_success', created_tasks_count: specialistRuns[2]?.createdTasks.length ?? 0 },
+        { agent_name: 'content_curriculum', created_tasks_count: specialistRuns[1]?.createdTasks.length ?? 0 },
+        { agent_name: 'growth', created_tasks_count: specialistRuns[2]?.createdTasks.length ?? 0 },
+        { agent_name: 'support_success', created_tasks_count: specialistRuns[3]?.createdTasks.length ?? 0 },
       ],
     } as Record<string, unknown>,
     metrics_snapshot: metrics ? (metrics as unknown as Record<string, unknown>) : {},

@@ -30,10 +30,10 @@ async function postJson(url: string) {
 export function CeoActionBar() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [activeAction, setActiveAction] = useState<'seed' | 'run' | 'product-tech' | 'growth' | 'support-success' | null>(null);
+  const [activeAction, setActiveAction] = useState<'seed' | 'run' | 'product-tech' | 'content-curriculum' | 'growth' | 'support-success' | null>(null);
   const [state, setState] = useState<ActionState>(null);
 
-  const handleAction = (action: 'seed' | 'run' | 'product-tech' | 'growth' | 'support-success') => {
+  const handleAction = (action: 'seed' | 'run' | 'product-tech' | 'content-curriculum' | 'growth' | 'support-success') => {
     setActiveAction(action);
     setState(null);
 
@@ -43,11 +43,13 @@ export function CeoActionBar() {
           ? '/api/agents/tasks/seed'
           : action === 'product-tech'
             ? '/api/agents/product-tech/run'
-            : action === 'growth'
-              ? '/api/agents/growth/run'
-              : action === 'support-success'
-                ? '/api/agents/support-success/run'
-                : '/api/agents/ceo/run';
+            : action === 'content-curriculum'
+              ? '/api/agents/content-curriculum/run'
+              : action === 'growth'
+                ? '/api/agents/growth/run'
+                : action === 'support-success'
+                  ? '/api/agents/support-success/run'
+                  : '/api/agents/ceo/run';
 
         const result = await postJson(endpoint);
 
@@ -64,13 +66,15 @@ export function CeoActionBar() {
                 ? `Seeded ${inserted} starter task${inserted === 1 ? '' : 's'}.`
                 : 'Starter task seeding completed.',
           });
-        } else if (action === 'product-tech' || action === 'growth' || action === 'support-success') {
+        } else if (action === 'product-tech' || action === 'content-curriculum' || action === 'growth' || action === 'support-success') {
           const createdTasks = Array.isArray(result?.createdTasks) ? result.createdTasks.length : 0;
           const label = action === 'product-tech'
             ? 'Product & Tech'
-            : action === 'growth'
-              ? 'Growth'
-              : 'Support & Success';
+            : action === 'content-curriculum'
+              ? 'Content & Curriculum'
+              : action === 'growth'
+                ? 'Growth'
+                : 'Support & Success';
 
           setState({
             tone: 'success',
@@ -105,6 +109,7 @@ export function CeoActionBar() {
   const runBusy = isPending && activeAction === 'run';
   const seedBusy = isPending && activeAction === 'seed';
   const productTechBusy = isPending && activeAction === 'product-tech';
+  const contentCurriculumBusy = isPending && activeAction === 'content-curriculum';
   const growthBusy = isPending && activeAction === 'growth';
   const supportBusy = isPending && activeAction === 'support-success';
 
@@ -128,6 +133,15 @@ export function CeoActionBar() {
         >
           {productTechBusy ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
           {productTechBusy ? 'Running…' : 'Run Product & Tech'}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAction('content-curriculum')}
+          disabled={isPending}
+          className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-2 text-sm font-bold text-fuchsia-300 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {contentCurriculumBusy ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
+          {contentCurriculumBusy ? 'Running…' : 'Run Content & Curriculum'}
         </button>
         <button
           type="button"
