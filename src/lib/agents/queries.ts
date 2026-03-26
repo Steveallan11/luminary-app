@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric } from '@/types/agents';
+import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric, LessonStructureRecord } from '@/types/agents';
 
 export function getServiceSupabaseClient() {
   return getServiceSupabase();
@@ -178,4 +178,22 @@ export async function insertAgentTasks(agentName: string, tasks: AgentTaskDraft[
   }
 
   return (data as AgentTask[]) ?? [];
+}
+
+export async function getRecentLessonStructures(limit = 10): Promise<LessonStructureRecord[]> {
+  const supabase = getServiceSupabase();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('topic_lesson_structures')
+    .select('id, topic_id, key_stage, age_group, status, spark_json, explore_json, anchor_json, practise_json, create_json, check_json, celebrate_json, created_at, topics(title, subjects(name))')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn('Failed to fetch lesson structures:', error.message);
+    return [];
+  }
+
+  return (data as LessonStructureRecord[]) ?? [];
 }

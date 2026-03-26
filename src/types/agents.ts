@@ -58,6 +58,28 @@ export interface BusinessMetric {
   created_at: string;
 }
 
+export interface LessonStructureRecord {
+  id: string;
+  topic_id: string;
+  key_stage: string | null;
+  age_group: string | null;
+  status: string;
+  spark_json: Record<string, unknown> | null;
+  explore_json: Record<string, unknown> | null;
+  anchor_json: Record<string, unknown> | null;
+  practise_json: Record<string, unknown> | null;
+  create_json: Record<string, unknown> | null;
+  check_json: Record<string, unknown> | null;
+  celebrate_json: Record<string, unknown> | null;
+  created_at: string;
+  topics?: {
+    title?: string | null;
+    subjects?: {
+      name?: string | null;
+    } | null;
+  } | null;
+}
+
 export interface AgentFinding {
   title: string;
   detail: string;
