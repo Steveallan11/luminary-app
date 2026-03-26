@@ -25,12 +25,15 @@ export async function POST(request: NextRequest) {
     console.log('[v0] Redirect URL:', redirectUrl);
 
     // Sign up with Supabase Auth
+    // The callback route will exchange the code for a session and redirect to onboarding
+    const origin = request.headers.get('origin') || 'https://www.meetlumi.co.uk';
+    const callbackUrl = `${origin}/auth/callback?next=/auth/onboarding`;
+    
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
-          `${request.headers.get('origin')}/auth/onboarding`,
+        emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || callbackUrl,
         data: {
           family_name: familyName,
         },
