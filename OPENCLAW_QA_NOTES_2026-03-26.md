@@ -108,13 +108,39 @@ Confirmed in code review:
 
 ---
 
+### 5. Core teaching lane is structurally strong but still mock-driven under the hood
+**Severity:** High
+**Area:** Core product loop
+
+Confirmed in code review:
+- `src/app/learn/[slug]/[topic]/page.tsx` is a substantial real UI flow with session state, streaming chat UI, generation handling, content rendering, phase transitions, and realtime hooks
+- but it still depends heavily on `MOCK_CHILD`, `MOCK_SUBJECTS`, `MOCK_TOPICS`, `MOCK_TOPIC_ASSETS`, and mock diagrams/content
+- `/api/lesson/start` currently calls `startLesson()` from local lesson-engine logic and returns `MOCK_CHILD`
+- `/api/lumi/chat` uses real Anthropic streaming if an API key exists, but the surrounding lesson/topic/child context is still driven primarily by mock helpers and mock structures
+- if no Anthropic API key exists, `/api/lumi/chat` returns a demo stream so the UI still appears functional
+
+**Why it matters:**
+- the most important product lane looks more mature than it really is
+- the front-end lesson experience is ahead of the backend truth model
+- this is a good sign for UX progress, but not yet proof of production readiness
+- the gap is now clear: the UI shell is strong, but the data/session/content layer needs to be made real deliberately
+
+**Suggested fix:**
+- treat `auth -> learn -> lesson start -> Lumi chat` as the first end-to-end lane to make real
+- replace silent/mock defaults with explicit environment- or mode-based behavior
+- progressively replace mock child/topic/session context with real Supabase-backed entities
+- create a route/service checklist specifically for the core teaching lane
+
+---
+
 ## Recommended Priority Order
 
 1. Fix public placeholder links on homepage
 2. Improve learner login wording
 3. Audit auth flow for demo-only logic vs production logic
 4. Create a route-by-route readiness matrix (real vs mock vs hybrid)
-5. Continue QA into signup, post-auth routes, and protected pages
+5. Make the core teaching lane (`auth -> learn -> lesson start -> Lumi chat`) explicitly real or explicitly demo
+6. Continue QA into signup, post-auth routes, and protected pages
 
 ---
 

@@ -32,7 +32,7 @@ This is a build-planning tool.
 |---|---|---|
 | `/learn` | Hybrid | Fetches APIs, but silently falls back to mock data. |
 | `/learn/[slug]` | Unknown | Needs route-specific review. |
-| `/learn/[slug]/[topic]` | Unknown | Important route; needs deep lesson/runtime audit. |
+| `/learn/[slug]/[topic]` | Hybrid | Strong real UI/state/streaming structure, but still heavily mock-driven for child/topic/content context. |
 
 ### Parent Experience
 | Route | Status | Notes |
@@ -66,8 +66,10 @@ This is a build-planning tool.
 | `/api/stripe/checkout` | Unknown | Needs runtime validation. |
 | `/api/admin/login` | Hybrid/More Real | Used by admin login flow; needs auth/session validation. |
 | `/api/admin/*` content/lesson/media routes | Unknown | Needs deeper audit to assess how many are fully wired. |
-| `/api/lumi/*` | Unknown | High-priority future audit area. |
-| `/api/lesson/*` | Unknown | High-priority future audit area. |
+| `/api/lumi/chat` | Hybrid | Real Anthropic streaming path exists, but lesson/topic/child context is still mostly mock-backed and demo fallback stream exists when no API key is present. |
+| `/api/lesson/start` | Hybrid | Real route and lesson-engine entry point, but currently returns mock child context and local/mock-backed lesson state. |
+| `/api/lumi/*` other | Unknown | Remaining Lumi routes still need audit. |
+| `/api/lesson/*` other | Unknown | Remaining lesson routes still need audit. |
 
 ---
 
