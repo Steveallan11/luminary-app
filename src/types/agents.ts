@@ -85,6 +85,15 @@ export interface AgentOutput {
   tasks: AgentTaskDraft[];
 }
 
+export interface AgentStatusSummary {
+  agent_name: AgentName;
+  latest_run_at: string | null;
+  summary: string;
+  status: 'ok' | 'attention' | 'blocked';
+  created_tasks_count: number;
+  open_tasks_count: number;
+}
+
 export interface CeoDashboardData {
   overview: {
     last_ceo_run_at: string | null;
@@ -98,6 +107,7 @@ export interface CeoDashboardData {
     blockers: string[];
     next_actions: string[];
   };
+  agents: AgentStatusSummary[];
   tasks: AgentTask[];
   logs: AgentLog[];
 }

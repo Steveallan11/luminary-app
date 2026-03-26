@@ -1,5 +1,35 @@
-import type { AgentOutput, CeoDashboardData } from '@/types/agents';
+import type { AgentLog, AgentName, AgentOutput, AgentSeverity, AgentStatusSummary, CeoDashboardData } from '@/types/agents';
 import { getLatestBusinessMetric, getOpenAgentTasks, getRecentAgentLogs, insertAgentLog, insertAgentTasks } from '@/lib/agents/queries';
+
+const AGENT_ORDER: AgentName[] = ['ceo', 'product_tech', 'content_curriculum', 'growth', 'support_success', 'finance_ops'];
+
+function getAgentStatusTone(severity: AgentSeverity | null, openTasksCount: number): AgentStatusSummary['status'] {
+  if (severity === 'critical' || openTasksCount > 0) {
+    return 'blocked';
+  }
+
+  if (severity === 'high' || severity === 'medium') {
+    return 'attention';
+  }
+
+  return 'ok';
+}
+
+function buildAgentSummaries(logs: AgentLog[], tasks: Awaited<ReturnType<typeof getOpenAgentTasks>>): AgentStatusSummary[] {
+  return AGENT_ORDER.map((agentName) => {
+    const latestLog = logs.find((log) => log.agent_name === agentName) ?? null;
+    const agentTasks = tasks.filter((task) => task.agent_name === agentName);
+
+    return {
+      agent_name: agentName,
+      latest_run_at: latestLog?.run_at ?? null,
+      summary: latestLog?.summary ?? 'No runs yet.',
+      status: getAgentStatusTone(latestLog?.severity ?? null, agentTasks.length),
+      created_tasks_count: latestLog?.created_tasks_count ?? 0,
+      open_tasks_count: agentTasks.length,
+    };
+  });
+}
 
 function buildFallbackCeoOutput(data: {
   metrics: Awaited<ReturnType<typeof getLatestBusinessMetric>>;
@@ -116,6 +146,7 @@ export async function runCeoReview(): Promise<{ output: AgentOutput; dashboard: 
         blockers: blockerTitles,
         next_actions: nextActions,
       },
+      agents: buildAgentSummaries(refreshedLogs, refreshedTasks),
       tasks: refreshedTasks,
       logs: refreshedLogs,
     },
@@ -155,6 +186,7 @@ export async function getCeoDashboard(): Promise<CeoDashboardData> {
       blockers: blockers.map((task) => task.title).slice(0, 3),
       next_actions: priorities,
     },
+    agents: buildAgentSummaries(logs, tasks),
     tasks,
     logs,
   };

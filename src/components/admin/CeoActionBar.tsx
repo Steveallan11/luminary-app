@@ -30,16 +30,22 @@ async function postJson(url: string) {
 export function CeoActionBar() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [activeAction, setActiveAction] = useState<'seed' | 'run' | null>(null);
+  const [activeAction, setActiveAction] = useState<'seed' | 'run' | 'product-tech' | null>(null);
   const [state, setState] = useState<ActionState>(null);
 
-  const handleAction = (action: 'seed' | 'run') => {
+  const handleAction = (action: 'seed' | 'run' | 'product-tech') => {
     setActiveAction(action);
     setState(null);
 
     startTransition(async () => {
       try {
-        const result = await postJson(action === 'seed' ? '/api/agents/tasks/seed' : '/api/agents/ceo/run');
+        const endpoint = action === 'seed'
+          ? '/api/agents/tasks/seed'
+          : action === 'product-tech'
+            ? '/api/agents/product-tech/run'
+            : '/api/agents/ceo/run';
+
+        const result = await postJson(endpoint);
 
         if (action === 'seed') {
           const inserted = typeof result?.inserted === 'number' ? result.inserted : 0;
@@ -53,6 +59,15 @@ export function CeoActionBar() {
               : inserted > 0
                 ? `Seeded ${inserted} starter task${inserted === 1 ? '' : 's'}.`
                 : 'Starter task seeding completed.',
+          });
+        } else if (action === 'product-tech') {
+          const createdTasks = Array.isArray(result?.createdTasks) ? result.createdTasks.length : 0;
+
+          setState({
+            tone: 'success',
+            message: createdTasks > 0
+              ? `Product & Tech review completed and queued ${createdTasks} task${createdTasks === 1 ? '' : 's'}.`
+              : 'Product & Tech review completed.',
           });
         } else {
           const dashboard = result?.dashboard as { overview?: { open_high_priority_tasks?: number } } | undefined;
@@ -80,6 +95,7 @@ export function CeoActionBar() {
 
   const runBusy = isPending && activeAction === 'run';
   const seedBusy = isPending && activeAction === 'seed';
+  const productTechBusy = isPending && activeAction === 'product-tech';
 
   return (
     <div className="flex flex-col items-stretch gap-3 sm:items-end">
@@ -92,6 +108,15 @@ export function CeoActionBar() {
         >
           {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <DatabaseZap size={16} />}
           {seedBusy ? 'Seeding…' : 'Seed Starter Tasks'}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAction('product-tech')}
+          disabled={isPending}
+          className="inline-flex items-center gap-2 rounded-xl border border-electric/30 bg-electric/10 px-4 py-2 text-sm font-bold text-electric-light transition hover:bg-electric/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {productTechBusy ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
+          {productTechBusy ? 'Running…' : 'Run Product & Tech'}
         </button>
         <button
           type="button"

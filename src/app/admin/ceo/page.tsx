@@ -1,4 +1,4 @@
-import { BarChart3, Bot, Clock3, ShieldAlert } from 'lucide-react';
+import { BarChart3, Bot, Clock3, ShieldAlert, Wrench } from 'lucide-react';
 import { getCeoDashboard } from '@/lib/agents/run-ceo';
 import { CeoActionBar } from '@/components/admin/CeoActionBar';
 
@@ -94,6 +94,43 @@ export default async function AdminCeoPage() {
           )}
         </section>
       </div>
+
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <div className="mb-4 flex items-center gap-2 text-white">
+          <Wrench size={18} className="text-electric" />
+          <h2 className="text-lg font-bold">Agent Status</h2>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {dashboard.agents.map((agent) => (
+            <div key={agent.agent_name} className="rounded-xl border border-white/10 bg-navy/40 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-light/50">{agent.agent_name.replace('_', ' ')}</p>
+                  <p className="mt-2 text-sm text-slate-light/80">{agent.summary}</p>
+                </div>
+                <span
+                  className={[
+                    'rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em]',
+                    agent.status === 'blocked'
+                      ? 'bg-rose-500/15 text-rose-300'
+                      : agent.status === 'attention'
+                        ? 'bg-amber/15 text-amber-light'
+                        : 'bg-emerald-500/15 text-emerald-300',
+                  ].join(' ')}
+                >
+                  {agent.status}
+                </span>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-light/50">
+                <span>{agent.open_tasks_count} open task{agent.open_tasks_count === 1 ? '' : 's'}</span>
+                <span>{agent.latest_run_at ? new Date(agent.latest_run_at).toLocaleString() : 'Not run yet'}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
