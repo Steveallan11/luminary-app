@@ -13,6 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const adminEmail = await getAdminSessionEmail();
 
   const navItems = [
+    { href: '/admin/ceo', label: 'CEO', icon: LayoutDashboard },
     { href: '/admin/lessons', label: 'Lessons', icon: BookOpen },
     { href: '/admin/library', label: 'Library', icon: Library },
     { href: '/admin/images', label: 'Images', icon: Image },
