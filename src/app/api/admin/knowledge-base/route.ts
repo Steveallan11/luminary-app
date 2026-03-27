@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+let cachedAdminClient: SupabaseClient<any, any, any> | null = null;
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)');
+  }
+
+  if (cachedAdminClient) return cachedAdminClient;
+
+  cachedAdminClient = createClient(url, key);
+  return cachedAdminClient;
+}
 
 // GET: Fetch all knowledge base items for a lesson
 export async function GET(req: NextRequest) {
@@ -18,6 +27,7 @@ export async function GET(req: NextRequest) {
   const lessonId = searchParams.get('lesson_id');
   if (!lessonId) return NextResponse.json({ error: 'lesson_id required' }, { status: 400 });
 
+  const supabase = getAdminClient();
   const { data, error } = await supabase
     .from('lesson_knowledge_base')
     .select('*')
@@ -31,6 +41,8 @@ export async function GET(req: NextRequest) {
 // POST: Add a knowledge base item (text snippet or URL reference)
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getAdminClient();
+
     const body = await req.json();
     const { lesson_id, title, content_type, text_content, file_url, file_name, file_size, description } = body;
 
@@ -42,8 +54,9 @@ export async function POST(req: NextRequest) {
     let extracted_summary = '';
     let key_concepts: string[] = [];
 
-    if (text_content && text_content.length > 100) {
+    if (process.env.ANTHROPIC_API_KEY && text_content && text_content.length > 100) {
       try {
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
         const summaryResponse = await anthropic.messages.create({
           model: 'claude-opus-4-6',
           max_tokens: 500,
@@ -93,6 +106,7 @@ export async function DELETE(req: NextRequest) {
   const itemId = searchParams.get('id');
   if (!itemId) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
+  const supabase = getAdminClient();
   const { error } = await supabase
     .from('lesson_knowledge_base')
     .delete()
@@ -105,6 +119,8 @@ export async function DELETE(req: NextRequest) {
 // PATCH: Toggle active status
 export async function PATCH(req: NextRequest) {
   try {
+    const supabase = getAdminClient();
+
     const body = await req.json();
     const { id, is_active } = body;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });

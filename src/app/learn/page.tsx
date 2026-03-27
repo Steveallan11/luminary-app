@@ -76,7 +76,20 @@ export default function LearnPage() {
     );
   }
 
-  if (!isLoading && (!subjectData || !childData)) {
+  if (isLoading) {
+    return (
+      <ChildLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 size={32} className="text-amber animate-spin mx-auto mb-3" />
+            <p className="text-slate-light/60 text-sm">Loading your learning world...</p>
+          </div>
+        </div>
+      </ChildLayout>
+    );
+  }
+
+  if (!subjectData || !childData) {
     return (
       <ChildLayout>
         <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
@@ -111,19 +124,6 @@ export default function LearnPage() {
   const handlePickedSubject = (subjectSlug: string) => {
     markFirstRunMission(childId, 'pick_subject');
   };
-
-  if (isLoading) {
-    return (
-      <ChildLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <Loader2 size={32} className="text-amber animate-spin mx-auto mb-3" />
-            <p className="text-slate-light/60 text-sm">Loading your learning world...</p>
-          </div>
-        </div>
-      </ChildLayout>
-    );
-  }
 
   return (
     <ChildLayout>

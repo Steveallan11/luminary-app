@@ -91,6 +91,8 @@ This guide walks you through finding or generating each required environment var
 
 **Purpose:** Server-side access to Supabase for admin operations, lesson generation, and report generation.
 
+**Note:** Some server routes also accept `SUPABASE_URL` as an alternative name for the project URL (same value as `NEXT_PUBLIC_SUPABASE_URL`). Prefer setting `NEXT_PUBLIC_SUPABASE_URL` everywhere; only add `SUPABASE_URL` if you have legacy config.
+
 ### Steps:
 
 1. In Supabase, go to **Settings** → **API**
@@ -147,6 +149,7 @@ This guide walks you through finding or generating each required environment var
 | `STRIPE_PRO_PRICE_ID` | Stripe Dashboard → Products → Pro Plan | `price_2K3L4M...` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API | `https://xyz.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → Anon Public | `eyJhbGc...` |
+| `SUPABASE_URL` | (Optional) Same as `NEXT_PUBLIC_SUPABASE_URL` | `https://xyz.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → Service Role | `eyJhbGc...` |
 | `ANTHROPIC_API_KEY` | Anthropic Console → API Keys | `sk-ant-v1-...` |
 | `NEXT_PUBLIC_APP_URL` | Your Vercel domain (after deployment) | `https://luminary-xyz.vercel.app` |

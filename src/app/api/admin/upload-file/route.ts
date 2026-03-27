@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+let cachedAdminClient: SupabaseClient<any, any, any> | null = null;
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)');
+  }
+
+  if (cachedAdminClient) return cachedAdminClient;
+
+  cachedAdminClient = createClient(url, key);
+  return cachedAdminClient;
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getAdminClient();
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const lessonId = formData.get('lesson_id') as string;
