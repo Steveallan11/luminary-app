@@ -1,6 +1,48 @@
 import { createClient } from '@supabase/supabase-js';
 import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric, LessonStructureRecord } from '@/types/agents';
 
+export async function insertTopicAsset(asset: {
+  topic_id: string;
+  asset_type: string;
+  asset_subtype?: string | null;
+  title: string;
+  content_json: Record<string, unknown>;
+  age_group: string;
+  key_stage?: string | null;
+  status?: string;
+  generation_prompt?: string | null;
+  linked_lesson_id?: string | null;
+}) {
+  const supabase = getServiceSupabase();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('topic_assets')
+    .insert({
+      topic_id: asset.topic_id,
+      asset_type: asset.asset_type,
+      asset_subtype: asset.asset_subtype ?? null,
+      title: asset.title,
+      content_json: asset.content_json,
+      age_group: asset.age_group,
+      key_stage: asset.key_stage ?? null,
+      status: asset.status ?? 'draft',
+      generation_prompt: asset.generation_prompt ?? null,
+      generated_at: new Date().toISOString(),
+      linked_lesson_id: asset.linked_lesson_id ?? null,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.warn('Failed to insert topic asset:', error.message);
+    return null;
+  }
+
+  return data as Record<string, unknown>;
+}
+
+
 export function getServiceSupabaseClient() {
   return getServiceSupabase();
 }
