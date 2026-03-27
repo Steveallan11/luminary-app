@@ -381,7 +381,36 @@ export default function OnboardingPage() {
 
               <div className="space-y-3">
                 <Button
-                  onClick={() => router.push('/learn')}
+                  onClick={async () => {
+                    // Create child record (v1: minimal, service-role backed).
+                    // Parent email is still not real auth yet, so we use a placeholder until the auth lane is made real.
+                    const parent_email = 'demo-parent@luminary.app';
+                    const response = await fetch('/api/children/create', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        parent_email,
+                        family_name: 'Demo Family',
+                        child: {
+                          name: childName,
+                          age: Number(age),
+                          year_group: yearGroup,
+                          avatar,
+                        },
+                      }),
+                    });
+
+                    const data = await response.json().catch(() => null) as any;
+                    if (!response.ok || !data?.child_id) {
+                      // Fall back to /learn (still works in mock mode), but we want the real lane soon.
+                      router.push('/learn');
+                      return;
+                    }
+
+                    localStorage.setItem('luminary_child_id', data.child_id);
+                    sessionStorage.setItem('luminary_child_id', data.child_id);
+                    router.push('/learn');
+                  }}
                   variant="primary"
                   size="lg"
                   className="w-full gap-2"
