@@ -44,26 +44,62 @@ export default function LearnPage() {
       fetch(`/api/learn/subjects${params}`).then((r) => r.json()).catch(() => null),
       fetch(`/api/learn/child-profile${params}`).then((r) => r.json()).catch(() => null),
     ]).then(([sData, cData]) => {
-      setSubjectData(sData || {
-        subjects: MOCK_SUBJECTS,
-        topics: [],
-        progress: MOCK_TOPIC_PROGRESS as any,
-        source: 'mock',
-      });
-      setChildData(cData || {
-        child: MOCK_CHILD,
-        sessions: MOCK_SESSIONS,
-        source: 'mock',
-      });
+      // No silent fallbacks: if Supabase-backed APIs fail, surface it.
+      setSubjectData(sData);
+      setChildData(cData);
       setIsLoading(false);
     });
   }, []);
 
-  const child = childData?.child || MOCK_CHILD;
-  const subjects = subjectData?.subjects || MOCK_SUBJECTS;
-  const progress = subjectData?.progress || (MOCK_TOPIC_PROGRESS as any);
-  const sessions = childData?.sessions || MOCK_SESSIONS;
   const childId = getChildIdFromStorage();
+
+  if (!isLoading && !childId) {
+    return (
+      <ChildLayout>
+        <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <h1 className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>
+              Let’s set up your learner
+            </h1>
+            <p className="mt-2 text-sm text-slate-light/70">
+              We couldn’t find a learner profile on this device yet.
+            </p>
+            <a
+              href="/auth/onboarding"
+              className="mt-5 inline-flex items-center justify-center rounded-2xl bg-amber px-5 py-3 text-sm font-bold text-navy"
+            >
+              Go to onboarding
+            </a>
+          </div>
+        </div>
+      </ChildLayout>
+    );
+  }
+
+  if (!isLoading && (!subjectData || !childData)) {
+    return (
+      <ChildLayout>
+        <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
+          <div className="rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6">
+            <h1 className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>
+              Can’t load your learning world
+            </h1>
+            <p className="mt-2 text-sm text-slate-light/70">
+              This is now a real-data page. If Supabase isn’t responding, we show it instead of silently switching to mock data.
+            </p>
+            <p className="mt-3 text-xs text-slate-light/50">
+              Try refreshing. If this keeps happening, we’ll need to check env vars and Supabase tables.
+            </p>
+          </div>
+        </div>
+      </ChildLayout>
+    );
+  }
+
+  const child = childData.child;
+  const subjects = subjectData.subjects;
+  const progress = subjectData.progress;
+  const sessions = childData.sessions;
 
   const getSubjectProgress = (slug: string) => {
     const subjectProgress = progress[slug];
