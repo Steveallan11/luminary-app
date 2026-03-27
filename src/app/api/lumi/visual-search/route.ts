@@ -5,6 +5,8 @@ import {
   type VisualSearchPipelineResult,
 } from '@/lib/visual-lumi';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/lumi/visual-search
  *
