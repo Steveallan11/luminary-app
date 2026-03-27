@@ -151,10 +151,34 @@ export default async function AdminCeoPage() {
         <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <div className="mb-4 flex items-center gap-2 text-white">
             <ShieldAlert size={18} className="text-orange-400" />
-            <h2 className="text-lg font-bold">Open Tasks</h2>
+            <h2 className="text-lg font-bold">Tasks</h2>
           </div>
-          <div className="space-y-3">
-            {dashboard.tasks.length > 0 ? dashboard.tasks.map((task) => (
+
+          {(() => {
+            const executableTypes = new Set([
+              'teaching_lane_audit',
+              'homepage_messaging_audit',
+              'parent_onboarding_audit',
+              'lesson_media_enrichment',
+              'lesson_game_or_worksheet',
+              'lesson_diagram_or_concept_card',
+              'homepage_copy_revision',
+              'generate_explanation_assets',
+              'generate_supporting_content_assets',
+              'lesson_media_pack',
+            ]);
+
+            const now = Date.now();
+            const isStuck = (task: any) => task.status === 'in_progress' && (now - new Date(task.updated_at).getTime()) > 30 * 60 * 1000;
+
+            const groups = {
+              pending: dashboard.tasks.filter((t) => t.status === 'pending'),
+              in_progress: dashboard.tasks.filter((t) => t.status === 'in_progress'),
+              blocked: dashboard.tasks.filter((t) => t.status === 'blocked'),
+              done: dashboard.tasks.filter((t) => t.status === 'done'),
+            };
+
+            const renderTask = (task: any) => (
               <div key={task.id} className="rounded-xl border border-white/10 bg-navy/40 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -166,9 +190,23 @@ export default async function AdminCeoPage() {
                       <span className={['rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em]', statusBadgeClasses(task.status)].join(' ')}>
                         {task.status.replace('_', ' ')}
                       </span>
+                      {executableTypes.has(task.task_type) ? (
+                        <span className="rounded-full bg-electric/15 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-electric">
+                          executable
+                        </span>
+                      ) : null}
+                      {isStuck(task) ? (
+                        <span className="rounded-full bg-rose-500/15 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-rose-300">
+                          stuck
+                        </span>
+                      ) : null}
                     </div>
                     {task.description && <p className="mt-1 text-sm text-slate-light/60">{task.description}</p>}
-                    <TaskActionButtons taskId={task.id} currentStatus={task.status} />
+                    {executableTypes.has(task.task_type) ? (
+                      <TaskActionButtons taskId={task.id} currentStatus={task.status} />
+                    ) : (
+                      <p className="mt-3 text-xs text-slate-light/50">Manual task (no executor yet).</p>
+                    )}
                   </div>
                   <div className="text-right text-xs text-slate-light/50">
                     <p>{task.agent_name}</p>
@@ -176,10 +214,29 @@ export default async function AdminCeoPage() {
                   </div>
                 </div>
               </div>
-            )) : (
-              <p className="text-sm text-slate-light/40">No open tasks yet.</p>
-            )}
-          </div>
+            );
+
+            const renderGroup = (label: string, tasks: any[]) => (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-light/40">{label}</p>
+                  <p className="text-xs text-slate-light/50">{tasks.length}</p>
+                </div>
+                {tasks.length > 0 ? tasks.map(renderTask) : (
+                  <p className="text-sm text-slate-light/40">None.</p>
+                )}
+              </div>
+            );
+
+            return (
+              <div className="space-y-6">
+                {renderGroup('To do', groups.pending)}
+                {renderGroup('Doing', groups.in_progress)}
+                {renderGroup('Blocked', groups.blocked)}
+                {renderGroup('Done (latest)', groups.done.slice(0, 10))}
+              </div>
+            );
+          })()}
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
