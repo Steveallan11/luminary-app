@@ -5,10 +5,12 @@ import Anthropic from '@anthropic-ai/sdk';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -18,7 +20,7 @@ export async function GET(req: NextRequest) {
   const lessonId = searchParams.get('lesson_id');
   if (!lessonId) return NextResponse.json({ error: 'lesson_id required' }, { status: 400 });
 
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('lesson_knowledge_base')
     .select('*')
     .eq('lesson_id', lessonId)
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
       } catch { /* Continue without summary */ }
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getAdminClient()
       .from('lesson_knowledge_base')
       .insert({
         lesson_id,
@@ -93,7 +95,7 @@ export async function DELETE(req: NextRequest) {
   const itemId = searchParams.get('id');
   if (!itemId) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-  const { error } = await supabase
+  const { error } = await getAdminClient()
     .from('lesson_knowledge_base')
     .delete()
     .eq('id', itemId);
@@ -109,7 +111,7 @@ export async function PATCH(req: NextRequest) {
     const { id, is_active } = body;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-    const { data, error } = await supabase
+    const { data, error } = await getAdminClient()
       .from('lesson_knowledge_base')
       .update({ is_active })
       .eq('id', id)

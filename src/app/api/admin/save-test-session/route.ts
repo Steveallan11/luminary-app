@@ -4,14 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // Ensure the admin_test_sessions table exists
 async function ensureTable() {
-  const { error } = await supabase.rpc('exec_sql', {
+  const { error } = await getAdminClient().rpc('exec_sql', {
     sql: `CREATE TABLE IF NOT EXISTS admin_test_sessions (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       lesson_id uuid NOT NULL,
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
     // Try to upsert the session record
     // First try with the session_id as the id
     if (action === 'end') {
-      const { data, error } = await supabase
+      const { data, error } = await getAdminClient()
         .from('admin_test_sessions')
         .upsert({
           id: session_id,
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
 
       if (error) {
         // Table might not exist — try to create it via direct SQL
-        const createResult = await supabase.from('admin_test_sessions').select('id').limit(1);
+        const createResult = await getAdminClient().from('admin_test_sessions').select('id').limit(1);
         if (createResult.error?.code === '42P01') {
           // Table doesn't exist — return success anyway, content is saved in lesson itself
           return NextResponse.json({
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
     }
 
     // For 'upsert' action — save incremental updates
-    const { data, error } = await supabase
+    const { data, error } = await getAdminClient()
       .from('admin_test_sessions')
       .upsert({
         id: session_id,

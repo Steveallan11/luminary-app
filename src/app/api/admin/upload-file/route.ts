@@ -4,10 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await getAdminClient().storage
       .from(bucket)
       .upload(fileName, buffer, {
         contentType: file.type,
@@ -40,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (uploadError) {
       // If bucket doesn't exist, try to create it
       if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('bucket')) {
-        const { error: createError } = await supabase.storage.createBucket(bucket, {
+        const { error: createError } = await getAdminClient().storage.createBucket(bucket, {
           public: true,
           fileSizeLimit: 52428800, // 50MB
           allowedMimeTypes: [
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: `Storage error: ${uploadError.message}` }, { status: 500 });
         }
         // Retry upload
-        const { data: retryData, error: retryError } = await supabase.storage
+        const { data: retryData, error: retryError } = await getAdminClient().storage
           .from(bucket)
           .upload(fileName, buffer, { contentType: file.type, upsert: false });
         if (retryError) {
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get public URL
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = getAdminClient().storage
       .from(bucket)
       .getPublicUrl(fileName);
 

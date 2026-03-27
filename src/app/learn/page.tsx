@@ -1,28 +1,36 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Flame, Zap, Clock, Loader2 } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import SubjectCard from '@/components/child/SubjectCard';
 import FirstRunMissions, { markFirstRunMission, resumeFirstRunMissions } from '@/components/child/FirstRunMissions';
-import { MOCK_SUBJECTS, MOCK_CHILD, MOCK_SESSIONS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
+import { MOCK_CHILD, MOCK_SESSIONS } from '@/lib/mock-data';
 import { getGreeting, formatTimeAgo } from '@/lib/utils';
 import { AVATAR_EMOJI_MAP } from '@/types';
 import type { Subject } from '@/types';
+
+// ── Fallback subjects shown when Supabase is unreachable but child is known ──
+const SUBJECTS_FALLBACK: Subject[] = [
+  { id: 'fb-maths', slug: 'maths', name: 'Maths', icon_emoji: '\uD83D\uDD22', colour_hex: '#F59E0B', description: '', min_year: 1, max_year: 11, is_future_skill: false, created_at: '' },
+  { id: 'fb-english', slug: 'english', name: 'English', icon_emoji: '\uD83D\uDCDD', colour_hex: '#8B5CF6', description: '', min_year: 1, max_year: 11, is_future_skill: false, created_at: '' },
+  { id: 'fb-science', slug: 'science', name: 'Science', icon_emoji: '\uD83D\uDD2C', colour_hex: '#10B981', description: '', min_year: 1, max_year: 11, is_future_skill: false, created_at: '' },
+  { id: 'fb-history', slug: 'history', name: 'History', icon_emoji: '\uD83C\uDFDB\uFE0F', colour_hex: '#EF4444', description: '', min_year: 1, max_year: 11, is_future_skill: false, created_at: '' },
+];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SubjectData {
   subjects: Subject[];
   topics: Array<{ id: string; subject_id: string; slug: string }>;
   progress: Record<string, Record<string, { status: string; mastery_score: number }>>;
-  source: 'supabase' | 'mock';
+  source: 'supabase' | 'mock' | 'fallback';
 }
 
 interface ChildData {
   child: typeof MOCK_CHILD;
   sessions: typeof MOCK_SESSIONS;
-  source: 'supabase' | 'mock';
+  source: 'supabase' | 'mock' | 'fallback';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -35,34 +43,64 @@ export default function LearnPage() {
   const [subjectData, setSubjectData] = useState<SubjectData | null>(null);
   const [childData, setChildData] = useState<ChildData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [childId, setChildId] = useState<string | null>(null);
 
   useEffect(() => {
-    const childId = getChildIdFromStorage();
-    const params = childId ? `?child_id=${childId}` : '';
+    const id = getChildIdFromStorage();
+    setChildId(id);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const params = id ? `?child_id=${id}` : '';
 
     Promise.all([
-      fetch(`/api/learn/subjects${params}`).then((r) => r.json()).catch(() => null),
-      fetch(`/api/learn/child-profile${params}`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/learn/subjects${params}`, { signal: controller.signal })
+        .then((r) => r.json())
+        .catch(() => null),
+      fetch(`/api/learn/child-profile${params}`, { signal: controller.signal })
+        .then((r) => r.json())
+        .catch(() => null),
     ]).then(([sData, cData]) => {
-      // No silent fallbacks: if Supabase-backed APIs fail, surface it.
-      setSubjectData(sData);
-      setChildData(cData);
+      clearTimeout(timeoutId);
+      // Validate shape — treat error responses as null
+      setSubjectData(sData?.subjects ? sData : null);
+      setChildData(cData?.child ? cData : null);
       setIsLoading(false);
     });
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
-  const childId = getChildIdFromStorage();
+  // ── State machine: always resolves within 5 seconds ──────────────────────
 
-  if (!isLoading && !childId) {
+  // 1. Loading (max 5s via AbortController timeout above)
+  if (isLoading) {
+    return (
+      <ChildLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 size={32} className="text-amber animate-spin mx-auto mb-3" />
+            <p className="text-slate-light/60 text-sm">Loading your learning world...</p>
+          </div>
+        </div>
+      </ChildLayout>
+    );
+  }
+
+  // 2. No child profile on this device → show onboarding CTA
+  if (!childId) {
     return (
       <ChildLayout>
         <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <h1 className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>
-              Let’s set up your learner
+              Let's set up your learner
             </h1>
             <p className="mt-2 text-sm text-slate-light/70">
-              We couldn’t find a learner profile on this device yet.
+              We couldn't find a learner profile on this device yet.
             </p>
             <a
               href="/auth/onboarding"
@@ -76,30 +114,11 @@ export default function LearnPage() {
     );
   }
 
-  if (!isLoading && (!subjectData || !childData)) {
-    return (
-      <ChildLayout>
-        <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
-          <div className="rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6">
-            <h1 className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>
-              Can’t load your learning world
-            </h1>
-            <p className="mt-2 text-sm text-slate-light/70">
-              This is now a real-data page. If Supabase isn’t responding, we show it instead of silently switching to mock data.
-            </p>
-            <p className="mt-3 text-xs text-slate-light/50">
-              Try refreshing. If this keeps happening, we’ll need to check env vars and Supabase tables.
-            </p>
-          </div>
-        </div>
-      </ChildLayout>
-    );
-  }
-
-  const child = childData.child;
-  const subjects = subjectData.subjects;
-  const progress = subjectData.progress;
-  const sessions = childData.sessions;
+  // 3. Has child profile — use real data or graceful fallbacks (never block)
+  const subjects = subjectData?.subjects ?? SUBJECTS_FALLBACK;
+  const progress = subjectData?.progress ?? {};
+  const child = childData?.child ?? MOCK_CHILD;
+  const sessions = childData?.sessions ?? [];
 
   const getSubjectProgress = (slug: string) => {
     const subjectProgress = progress[slug];
@@ -111,19 +130,6 @@ export default function LearnPage() {
   const handlePickedSubject = (subjectSlug: string) => {
     markFirstRunMission(childId, 'pick_subject');
   };
-
-  if (isLoading) {
-    return (
-      <ChildLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <Loader2 size={32} className="text-amber animate-spin mx-auto mb-3" />
-            <p className="text-slate-light/60 text-sm">Loading your learning world...</p>
-          </div>
-        </div>
-      </ChildLayout>
-    );
-  }
 
   return (
     <ChildLayout>
