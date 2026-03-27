@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_CHILD, MOCK_CHILDREN, MOCK_SESSIONS } from '@/lib/mock-data';
+import { getSupabaseServiceClient } from '@/lib/supabase-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,56 +7,48 @@ export const dynamic = 'force-dynamic';
  * GET /api/learn/child-profile?child_id=xxx
  *
  * Returns child profile with recent sessions.
- * Tries Supabase first, falls back to mock data if unavailable.
+ * This route is now REAL-DATA: no silent mock fallbacks.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const childId = searchParams.get('child_id');
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (supabaseUrl && supabaseKey && childId) {
-    try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      const { data: child, error } = await supabase
-        .from('children')
-        .select('*')
-        .eq('id', childId)
-        .single();
-
-      if (!error && child) {
-        // Fetch recent sessions
-        const { data: sessions } = await supabase
-          .from('learning_sessions')
-          .select('*')
-          .eq('child_id', childId)
-          .order('started_at', { ascending: false })
-          .limit(20);
-
-        return NextResponse.json({
-          child,
-          sessions: sessions || [],
-          source: 'supabase',
-        });
-      }
-    } catch (err) {
-      console.warn('Supabase child profile fetch failed, using mock data:', err);
-    }
+  if (!childId) {
+    return NextResponse.json({ error: 'child_id is required' }, { status: 400 });
   }
 
-  // Fallback to mock data
-  const child = childId
-    ? MOCK_CHILDREN.find((c) => c.id === childId) || MOCK_CHILD
-    : MOCK_CHILD;
+  try {
+    const supabase = getSupabaseServiceClient();
 
-  const sessions = MOCK_SESSIONS.filter((s) => s.child_id === child.id);
+    const { data: child, error: childError } = await supabase
+      .from('children')
+      .select('*')
+      .eq('id', childId)
+      .single();
 
-  return NextResponse.json({
-    child,
-    sessions,
-    source: 'mock',
-  });
+    if (childError) {
+      return NextResponse.json({ error: childError.message }, { status: 500 });
+    }
+
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('lesson_sessions')
+      .select('*')
+      .eq('child_id', childId)
+      .order('started_at', { ascending: false })
+      .limit(20);
+
+    if (sessionsError) {
+      return NextResponse.json({ error: sessionsError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      child,
+      sessions: sessions || [],
+      source: 'supabase',
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
+
