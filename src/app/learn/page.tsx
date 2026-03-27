@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Flame, Zap, Clock, Loader2 } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import SubjectCard from '@/components/child/SubjectCard';
+import FirstRunMissions, { markFirstRunMission, resumeFirstRunMissions } from '@/components/child/FirstRunMissions';
 import { MOCK_SUBJECTS, MOCK_CHILD, MOCK_SESSIONS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { getGreeting, formatTimeAgo } from '@/lib/utils';
 import { AVATAR_EMOJI_MAP } from '@/types';
@@ -62,12 +63,17 @@ export default function LearnPage() {
   const subjects = subjectData?.subjects || MOCK_SUBJECTS;
   const progress = subjectData?.progress || (MOCK_TOPIC_PROGRESS as any);
   const sessions = childData?.sessions || MOCK_SESSIONS;
+  const childId = getChildIdFromStorage();
 
   const getSubjectProgress = (slug: string) => {
     const subjectProgress = progress[slug];
     if (!subjectProgress) return { completed: 0, total: 5 };
     const completed = Object.values(subjectProgress).filter((s: any) => s.status === 'completed').length;
     return { completed, total: Object.keys(subjectProgress).length || 5 };
+  };
+
+  const handlePickedSubject = (subjectSlug: string) => {
+    markFirstRunMission(childId, 'pick_subject');
   };
 
   if (isLoading) {
@@ -133,6 +139,23 @@ export default function LearnPage() {
           <p className="text-slate-light/70">Ready to explore?</p>
         </motion.div>
 
+        <FirstRunMissions
+          childId={childId}
+          childName={child.name}
+          yearGroup={child.year_group}
+          sessionsCount={sessions.length}
+        />
+
+        <div className="mb-8 text-right">
+          <button
+            type="button"
+            onClick={() => resumeFirstRunMissions(childId)}
+            className="text-xs font-semibold text-slate-light/40 hover:text-slate-light/70"
+          >
+            Resume mission
+          </button>
+        </div>
+
         {/* Subject cards grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-10">
           {subjects.map((subject, i) => {
@@ -144,6 +167,7 @@ export default function LearnPage() {
                 index={i}
                 completedTopics={prog.completed}
                 totalTopics={prog.total}
+                onPick={handlePickedSubject}
               />
             );
           })}

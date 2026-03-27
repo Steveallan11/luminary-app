@@ -10,6 +10,7 @@ interface SubjectCardProps {
   index: number;
   completedTopics?: number;
   totalTopics?: number;
+  onPick?: (subjectSlug: string) => void;
 }
 
 export default function SubjectCard({
@@ -17,6 +18,7 @@ export default function SubjectCard({
   index,
   completedTopics = 0,
   totalTopics = 5,
+  onPick,
 }: SubjectCardProps) {
   const progress = totalTopics > 0 ? (completedTopics / totalTopics) * 100 : 0;
 
@@ -26,7 +28,7 @@ export default function SubjectCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.5, ease: 'easeOut' }}
     >
-      <Link href={`/learn/${subject.slug}`}>
+      <Link href={`/learn/${subject.slug}`} onClick={() => onPick?.(subject.slug)}>
         <div
           className="subject-card relative rounded-3xl p-5 sm:p-6 border border-white/10 backdrop-blur-sm overflow-hidden group min-h-[160px] flex flex-col justify-between"
           style={{
