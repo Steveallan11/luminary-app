@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { getMasteryBand } from '@/lib/mastery-v2';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/parent/dashboard
  *

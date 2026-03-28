@@ -4,12 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-// Use service role key for admin operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+// Use service role key for admin operations — lazy to avoid module-init crash at build time
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
 // Run DDL via a stored procedure if available, otherwise use raw fetch to PostgREST
 async function execSQL(sql: string): Promise<{ success: boolean; error?: string }> {
@@ -31,7 +33,7 @@ async function execSQL(sql: string): Promise<{ success: boolean; error?: string 
     if (res.ok) return { success: true };
 
     // Fallback: try the rpc approach
-    const { error } = await supabase.rpc('exec_ddl', { ddl: sql });
+    const { error } = await getAdminClient().rpc('exec_ddl', { ddl: sql });
     if (!error) return { success: true };
 
     return { success: false, error: `pg/query: ${res.status}, rpc: ${error.message}` };
@@ -42,7 +44,7 @@ async function execSQL(sql: string): Promise<{ success: boolean; error?: string 
 
 // Check if a table exists by trying to select from it
 async function tableExists(tableName: string): Promise<boolean> {
-  const { error } = await supabase.from(tableName).select('id').limit(1);
+  const { error } = await getAdminClient().from(tableName).select('id').limit(1);
   // If error code is PGRST116 or 42P01, table doesn't exist
   if (error && (error.code === 'PGRST116' || error.message.includes('does not exist'))) {
     return false;
@@ -52,7 +54,7 @@ async function tableExists(tableName: string): Promise<boolean> {
 
 // Check if a column exists in a table
 async function columnExists(tableName: string, columnName: string): Promise<boolean> {
-  const { data, error } = await supabase
+  const { data, error } = await getAdminClient()
     .from('information_schema.columns')
     .select('column_name')
     .eq('table_name', tableName)

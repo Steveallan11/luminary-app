@@ -12,7 +12,9 @@ import {
   parsePhaseSignal,
   parseImageSignals,
   stripAllSignals,
+  getAgeGroup,
 } from '@/lib/lesson-engine';
+import { getSupabaseServiceClient } from '@/lib/supabase-service';
 import { LessonPhase } from '@/types';
 
 interface ChatMessage {
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
     const {
+      child_id,
       subject_slug,
       topic_slug,
       messages,
@@ -56,14 +59,73 @@ export async function POST(request: NextRequest) {
     let activePhase: LessonPhase;
 
     if (admin_mode && admin_system_prompt) {
-      // Admin test mode: use the provided system prompt directly, skip mock data lookup
+      // Admin test mode: use the provided system prompt directly
       systemPrompt = admin_system_prompt;
       activePhase = current_phase ?? 'spark';
     } else {
-      // Normal child mode: use mock data and generate standard Lumi prompt
-      const child = MOCK_CHILD;
-      const subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug);
-      const topic = findTopicBySlug(subject_slug, topic_slug);
+      // ── Start with mock fallbacks ────────────────────────────────────────
+      let childName = MOCK_CHILD.name;
+      let childAge = MOCK_CHILD.age;
+      let subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug) ?? null;
+      let topic = findTopicBySlug(subject_slug, topic_slug);
+      let structure = topic ? getLessonStructureForTopic(topic.id, childAge) : null;
+
+      // ── Try to load real data from Supabase ──────────────────────────────
+      try {
+        const supabase = getSupabaseServiceClient();
+
+        // Load child profile for real name/age
+        if (child_id) {
+          const { data: childData } = await supabase
+            .from('children')
+            .select('name, age')
+            .eq('id', child_id)
+            .single();
+          if (childData) {
+            childName = childData.name;
+            childAge = childData.age;
+          }
+        }
+
+        // Load subject
+        const { data: subjectData } = await supabase
+          .from('subjects')
+          .select('*')
+          .eq('slug', subject_slug)
+          .single();
+
+        if (subjectData) {
+          subject = subjectData;
+
+          // Load topic
+          const { data: topicData } = await supabase
+            .from('topics')
+            .select('*')
+            .eq('subject_id', subjectData.id)
+            .eq('slug', topic_slug)
+            .single();
+
+          if (topicData) {
+            topic = topicData;
+
+            // Load lesson structure
+            const ageGroup = getAgeGroup(childAge);
+            const { data: structureData } = await supabase
+              .from('topic_lesson_structures')
+              .select('*')
+              .eq('topic_id', topicData.id)
+              .eq('age_group', ageGroup)
+              .eq('status', 'live')
+              .order('version', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (structureData) structure = structureData;
+          }
+        }
+      } catch {
+        // Supabase unavailable — mock fallbacks already set above
+      }
 
       if (!subject || !topic) {
         return new Response(JSON.stringify({ error: 'Subject or topic not found' }), {
@@ -74,12 +136,11 @@ export async function POST(request: NextRequest) {
 
       const phaseTracking = getMockPhaseTracking(session_id);
       activePhase = current_phase ?? phaseTracking.current_phase;
-      const structure = getLessonStructureForTopic(topic.id, child.age);
-      const contentManifest = buildContentManifest(topic.id);
+      const contentManifest = topic ? buildContentManifest(topic.id) : undefined;
 
       systemPrompt = generateLumiSystemPrompt({
-        child_name: child.name,
-        child_age: child.age,
+        child_name: childName,
+        child_age: childAge,
         subject_name: subject.name,
         topic_title: topic.title,
         topic_description: topic.description,

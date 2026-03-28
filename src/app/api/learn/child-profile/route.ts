@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServiceClient } from '@/lib/supabase-service';
+import { MOCK_CHILD, MOCK_SESSIONS } from '@/lib/mock-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic';
  * GET /api/learn/child-profile?child_id=xxx
  *
  * Returns child profile with recent sessions.
- * This route is now REAL-DATA: no silent mock fallbacks.
+ * Falls back to MOCK_CHILD if env vars are missing (preview / local dev without secrets).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,8 +18,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'child_id is required' }, { status: 400 });
   }
 
+  let supabase: ReturnType<typeof getSupabaseServiceClient>;
   try {
-    const supabase = getSupabaseServiceClient();
+    supabase = getSupabaseServiceClient();
+  } catch {
+    return NextResponse.json({
+      child: MOCK_CHILD,
+      sessions: MOCK_SESSIONS,
+      source: 'fallback',
+    });
+  }
+
+  try {
 
     const { data: child, error: childError } = await supabase
       .from('children')

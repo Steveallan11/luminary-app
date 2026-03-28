@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServiceClient } from '@/lib/supabase-service';
+import { MOCK_SUBJECTS } from '@/lib/mock-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,14 +8,25 @@ export const dynamic = 'force-dynamic';
  * GET /api/learn/subjects?child_id=xxx
  *
  * Returns subjects with topics and (optional) child progress.
- * This route is now REAL-DATA: no silent mock fallbacks.
+ * Falls back to MOCK_SUBJECTS if env vars are missing (preview / local dev without secrets).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const childId = searchParams.get('child_id');
 
+  let supabase: ReturnType<typeof getSupabaseServiceClient>;
   try {
-    const supabase = getSupabaseServiceClient();
+    supabase = getSupabaseServiceClient();
+  } catch {
+    return NextResponse.json({
+      subjects: MOCK_SUBJECTS,
+      topics: [],
+      progress: {},
+      source: 'fallback',
+    });
+  }
+
+  try {
 
     const { data: subjects, error: subjectsError } = await supabase
       .from('subjects')
