@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { startLessonForChild } from '@/lib/lesson-engine';
+import { startLessonForChildAsync } from '@/lib/lesson-engine';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { MOCK_CHILD } from '@/lib/mock-data';
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const result = startLessonForChild(subjectSlug, topicSlug, childData);
+    const result = await startLessonForChildAsync(subjectSlug, topicSlug, childData);
 
     if (!result) {
       return Response.json({ error: 'Topic not found' }, { status: 404 });
