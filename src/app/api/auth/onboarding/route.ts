@@ -78,8 +78,9 @@ export async function POST(request: NextRequest) {
           user_id: user.id,
           family_id: familyId,
           email: user.email?.toLowerCase(),
-          display_name: familyName.replace(' Family', '').replace(' family', ''),
-        });
+          full_name: familyName.replace(' Family', '').replace(' family', ''),
+          email_verified: true,
+        }, { onConflict: 'user_id' });
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
