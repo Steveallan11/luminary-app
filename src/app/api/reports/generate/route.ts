@@ -1,69 +1,190 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MOCK_CHILD, MOCK_CHILDREN, MOCK_SUBJECTS, MOCK_SESSIONS, MOCK_TOPIC_PROGRESS, MOCK_TOPICS } from '@/lib/mock-data';
+import { getSupabaseServiceClient } from '@/lib/supabase-service';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/reports/generate
  *
- * Generates an LA-compliant HTML progress report.
- * Matches the structure of the luminarylareportlylarae template.
+ * Generates an LA-compliant HTML progress report with real Supabase data.
+ * Includes authorization checks and data validation.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json().catch(() => ({}));
-    const childId = body.child_id || 'child-1';
+    const childId = body.child_id;
+    const familyId = body.family_id;
     const period = body.period || 'term';
 
-    const child = MOCK_CHILDREN.find((c) => c.id === childId) || MOCK_CHILD;
+    // Validate required fields
+    if (!childId || !familyId) {
+      return NextResponse.json(
+        { error: 'Missing child_id or family_id' },
+        { status: 400 }
+      );
+    }
 
-    // Gather data
-    const childSessions = MOCK_SESSIONS.filter((s) => s.child_id === child.id);
+    // Validate period parameter
+    const validPeriods = ['month', 'term', 'year'];
+    if (!validPeriods.includes(period)) {
+      return NextResponse.json(
+        { error: 'Invalid period. Must be: month, term, or year' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabaseServiceClient();
+
+    // 1. Authorization: Verify child belongs to family
+    const { data: child, error: childError } = await supabase
+      .from('children')
+      .select('id, name, age, year_group, streak_days, family_id')
+      .eq('id', childId)
+      .eq('family_id', familyId)
+      .single();
+
+    if (childError || !child) {
+      console.error('Authorization failed:', childError);
+      return NextResponse.json(
+        { error: 'Child not found or unauthorized access' },
+        { status: 403 }
+      );
+    }
+
+    // 2. Gather learning sessions for period
     const periodDays = period === 'month' ? 30 : period === 'year' ? 365 : 90;
-    const cutoff = Date.now() - periodDays * 86400000;
-    const recentSessions = childSessions.filter(
-      (s) => new Date(s.started_at).getTime() > cutoff
-    );
-    const totalMinutes = recentSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+    const cutoff = new Date(Date.now() - periodDays * 86400000).toISOString();
+
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('lesson_sessions')
+      .select('*, topic:topics(id, title, subject:subjects(id, name, icon_emoji, colour_hex))')
+      .eq('child_id', childId)
+      .gte('started_at', cutoff)
+      .order('started_at', { ascending: false });
+
+    if (sessionsError) {
+      console.error('Failed to fetch sessions:', sessionsError);
+      return NextResponse.json({ error: 'Failed to fetch learning data' }, { status: 500 });
+    }
+
+    // 3. Data validation
+    const validatedSessions = (sessions || []).filter((s) => {
+      // Validate duration is reasonable (0-240 minutes)
+      if ((s.duration_minutes || 0) < 0 || (s.duration_minutes || 0) > 240) {
+        console.warn(`Invalid session duration: ${s.duration_minutes} minutes`);
+        return false;
+      }
+      return true;
+    });
+
+    // 4. Aggregate data by subject
+    const subjectMap = new Map<
+      string,
+      { name: string; icon: string; sessions: typeof validatedSessions; totalMinutes: number }
+    >();
+
+    for (const session of validatedSessions) {
+      if (!session.topic) continue;
+      const subject = session.topic.subject;
+      const key = subject.id;
+
+      if (!subjectMap.has(key)) {
+        subjectMap.set(key, {
+          name: subject.name,
+          icon: subject.icon_emoji,
+          sessions: [],
+          totalMinutes: 0,
+        });
+      }
+
+      const entry = subjectMap.get(key)!;
+      entry.sessions.push(session);
+      entry.totalMinutes += session.duration_minutes || 0;
+    }
+
+    // 5. Get mastery data for each subject
+    const { data: topicProgress } = await supabase
+      .from('child_topic_progress')
+      .select('topic_id, mastery_score, status, topic_id')
+      .eq('child_id', childId);
+
+    // Fetch topic-to-subject mappings
+    const { data: topicsMapped } = await supabase
+      .from('topics')
+      .select('id, subject_id')
+      .in(
+        'id',
+        (topicProgress || []).map((tp) => tp.topic_id)
+      );
+
+    const topicToSubject = new Map((topicsMapped || []).map((t) => [t.id, t.subject_id]));
+
+    // Build subject data
+    const subjectData = Array.from(subjectMap.entries()).map(([subjectId, subject]) => {
+      const subjectTopicProgress = (topicProgress || []).filter(
+        (tp) => topicToSubject.get(tp.topic_id) === subjectId
+      );
+      const completed = subjectTopicProgress.filter((tp) => tp.status === 'completed').length;
+      const total = Math.max(subjectTopicProgress.length, 1);
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      // Validate mastery is 0-100
+      const validPercent = Math.max(0, Math.min(100, percent));
+
+      const totalMinutes = subject.totalMinutes;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+      return {
+        name: subject.name,
+        icon: subject.icon,
+        completed,
+        total,
+        percent: validPercent,
+        sessionCount: subject.sessions.length,
+        subjectTimeStr: timeStr,
+      };
+    });
+
+    // 6. Calculate totals
+    const totalMinutes = validatedSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
     const totalHours = Math.floor(totalMinutes / 60);
     const remainingMinutes = totalMinutes % 60;
-    const totalTimeStr = `${totalHours}h ${remainingMinutes}m`;
+    const totalTimeStr = totalHours > 0 ? `${totalHours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+    const completedTopics = subjectData.reduce((sum, s) => sum + s.completed, 0);
 
-    // Subject progress data
-    const subjectData = MOCK_SUBJECTS.map((subject) => {
-      const topics = MOCK_TOPICS[subject.slug] || [];
-      const progress = MOCK_TOPIC_PROGRESS[subject.slug] || {};
-      const completed = Object.values(progress).filter((t) => t.status === 'completed').length;
-      const total = topics.length;
-      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const hasActivity = Object.values(progress).some((t) => t.status !== 'locked');
-      const subjectSessions = recentSessions.filter((s) => {
-        const topic = topics.find((t) => t.id === s.topic_id);
-        return !!topic;
-      });
-      const sessionCount = subjectSessions.length;
-      const subjectMinutes = subjectSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
-      const subjectTimeStr = `${Math.floor(subjectMinutes / 60)}h ${subjectMinutes % 60}m`;
-      return { name: subject.name, icon: subject.icon_emoji, completed, total, percent, hasActivity, sessionCount, subjectTimeStr };
-    }).filter((s) => s.hasActivity);
-
+    // 7. Identify strongest and developing areas
     const sorted = [...subjectData].sort((a, b) => b.percent - a.percent);
     const strongest = sorted.slice(0, 3).map((s) => s.name);
     const developing = sorted.slice(-3).map((s) => s.name);
 
-    const reportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const periodLabel = period === 'month' ? 'Monthly' : period === 'year' ? 'Annual' : 'Termly';
-    const periodStart = new Date(Date.now() - periodDays * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    // 8. Format dates
+    const reportDate = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const periodLabel =
+      period === 'month' ? 'Monthly' : period === 'year' ? 'Annual' : 'Termly';
+    const periodStart = new Date(Date.now() - periodDays * 86400000).toLocaleDateString(
+      'en-GB',
+      { day: 'numeric', month: 'long', year: 'numeric' }
+    );
 
-    const completedTopics = subjectData.reduce((sum, s) => sum + s.completed, 0);
-
+    // 9. Generate report
     const html = buildLAReportHTML({
-      child,
+      child: {
+        name: child.name,
+        age: child.age,
+        year_group: child.year_group,
+        streak_days: child.streak_days,
+      },
       reportDate,
       periodStart,
       periodLabel,
       totalTimeStr,
-      totalSessions: recentSessions.length,
+      totalSessions: validatedSessions.length,
       completedTopics,
       subjectData,
       strongest,
@@ -86,55 +207,153 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const childId = searchParams.get('child_id') || 'child-1';
+    const childId = searchParams.get('child_id');
+    const familyId = searchParams.get('family_id');
     const period = searchParams.get('period') || 'term';
 
-    const child = MOCK_CHILDREN.find((c) => c.id === childId) || MOCK_CHILD;
+    if (!childId || !familyId) {
+      return NextResponse.json(
+        { error: 'Missing child_id or family_id' },
+        { status: 400 }
+      );
+    }
 
-    // Gather real mock data
-    const childSessions = MOCK_SESSIONS.filter((s) => s.child_id === child.id);
+    // Validate period
+    const validPeriods = ['month', 'term', 'year'];
+    if (!validPeriods.includes(period)) {
+      return NextResponse.json(
+        { error: 'Invalid period' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabaseServiceClient();
+
+    // Same authorization and data gathering as POST
+    const { data: child, error: childError } = await supabase
+      .from('children')
+      .select('id, name, age, year_group, streak_days, family_id')
+      .eq('id', childId)
+      .eq('family_id', familyId)
+      .single();
+
+    if (childError || !child) {
+      return NextResponse.json(
+        { error: 'Child not found or unauthorized' },
+        { status: 403 }
+      );
+    }
+
     const periodDays = period === 'month' ? 30 : period === 'year' ? 365 : 90;
-    const cutoff = Date.now() - periodDays * 86400000;
-    const recentSessions = childSessions.filter(
-      (s) => new Date(s.started_at).getTime() > cutoff
+    const cutoff = new Date(Date.now() - periodDays * 86400000).toISOString();
+
+    const { data: sessions } = await supabase
+      .from('lesson_sessions')
+      .select('*, topic:topics(id, title, subject:subjects(id, name, icon_emoji, colour_hex))')
+      .eq('child_id', childId)
+      .gte('started_at', cutoff)
+      .order('started_at', { ascending: false });
+
+    const validatedSessions = (sessions || []).filter(
+      (s) => (s.duration_minutes || 0) >= 0 && (s.duration_minutes || 0) <= 240
     );
-    const totalMinutes = recentSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+
+    const subjectMap = new Map<
+      string,
+      { name: string; icon: string; sessions: typeof validatedSessions; totalMinutes: number }
+    >();
+
+    for (const session of validatedSessions) {
+      if (!session.topic) continue;
+      const subject = session.topic.subject;
+      const key = subject.id;
+
+      if (!subjectMap.has(key)) {
+        subjectMap.set(key, {
+          name: subject.name,
+          icon: subject.icon_emoji,
+          sessions: [],
+          totalMinutes: 0,
+        });
+      }
+
+      const entry = subjectMap.get(key)!;
+      entry.sessions.push(session);
+      entry.totalMinutes += session.duration_minutes || 0;
+    }
+
+    const { data: topicProgress } = await supabase
+      .from('child_topic_progress')
+      .select('topic_id, mastery_score, status')
+      .eq('child_id', childId);
+
+    const { data: topicsMapped } = await supabase
+      .from('topics')
+      .select('id, subject_id')
+      .in(
+        'id',
+        (topicProgress || []).map((tp) => tp.topic_id)
+      );
+
+    const topicToSubject = new Map((topicsMapped || []).map((t) => [t.id, t.subject_id]));
+
+    const subjectData = Array.from(subjectMap.entries()).map(([subjectId, subject]) => {
+      const subjectTopicProgress = (topicProgress || []).filter(
+        (tp) => topicToSubject.get(tp.topic_id) === subjectId
+      );
+      const completed = subjectTopicProgress.filter((tp) => tp.status === 'completed').length;
+      const total = Math.max(subjectTopicProgress.length, 1);
+      const percent = Math.max(0, Math.min(100, total > 0 ? Math.round((completed / total) * 100) : 0));
+
+      const totalMinutes = subject.totalMinutes;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+      return {
+        name: subject.name,
+        icon: subject.icon,
+        completed,
+        total,
+        percent,
+        sessionCount: subject.sessions.length,
+        subjectTimeStr: timeStr,
+      };
+    });
+
+    const totalMinutes = validatedSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
     const totalHours = Math.floor(totalMinutes / 60);
     const remainingMinutes = totalMinutes % 60;
-    const totalTimeStr = `${totalHours}h ${remainingMinutes}m`;
-
-    const subjectData = MOCK_SUBJECTS.map((subject) => {
-      const topics = MOCK_TOPICS[subject.slug] || [];
-      const progress = MOCK_TOPIC_PROGRESS[subject.slug] || {};
-      const completed = Object.values(progress).filter((t) => t.status === 'completed').length;
-      const total = topics.length;
-      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const hasActivity = Object.values(progress).some((t) => t.status !== 'locked');
-      const subjectSessions = recentSessions.filter((s) => {
-        const topic = topics.find((t) => t.id === s.topic_id);
-        return !!topic;
-      });
-      const sessionCount = subjectSessions.length;
-      const subjectMinutes = subjectSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
-      const subjectTimeStr = `${Math.floor(subjectMinutes / 60)}h ${subjectMinutes % 60}m`;
-      return { name: subject.name, icon: subject.icon_emoji, completed, total, percent, hasActivity, sessionCount, subjectTimeStr };
-    }).filter((s) => s.hasActivity);
+    const totalTimeStr = totalHours > 0 ? `${totalHours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+    const completedTopics = subjectData.reduce((sum, s) => sum + s.completed, 0);
 
     const sorted = [...subjectData].sort((a, b) => b.percent - a.percent);
     const strongest = sorted.slice(0, 3).map((s) => s.name);
     const developing = sorted.slice(-3).map((s) => s.name);
-    const reportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const reportDate = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
     const periodLabel = period === 'month' ? 'Monthly' : period === 'year' ? 'Annual' : 'Termly';
-    const periodStart = new Date(Date.now() - periodDays * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const completedTopics = subjectData.reduce((sum, s) => sum + s.completed, 0);
+    const periodStart = new Date(Date.now() - periodDays * 86400000).toLocaleDateString(
+      'en-GB',
+      { day: 'numeric', month: 'long', year: 'numeric' }
+    );
 
     const html = buildLAReportHTML({
-      child,
+      child: {
+        name: child.name,
+        age: child.age,
+        year_group: child.year_group,
+        streak_days: child.streak_days,
+      },
       reportDate,
       periodStart,
       periodLabel,
       totalTimeStr,
-      totalSessions: recentSessions.length,
+      totalSessions: validatedSessions.length,
       completedTopics,
       subjectData,
       strongest,
@@ -153,8 +372,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Updated interface to match real data
 interface ReportParams {
-  child: typeof MOCK_CHILD;
+  child: {
+    name: string;
+    age: number;
+    year_group: string;
+    streak_days: number;
+  };
   reportDate: string;
   periodStart: string;
   periodLabel: string;
@@ -167,7 +392,6 @@ interface ReportParams {
     completed: number;
     total: number;
     percent: number;
-    hasActivity: boolean;
     sessionCount: number;
     subjectTimeStr: string;
   }>;
