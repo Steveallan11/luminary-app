@@ -32,3 +32,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# temporary files and directories
+/tmp/
+/temp/
+.tmp
+*.tmp
+*scratch*
+*generated*
+test-output*

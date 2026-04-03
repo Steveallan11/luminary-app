@@ -14,10 +14,19 @@ type LoginStep = 'email' | 'select-child' | 'pin' | 'parent-password';
 
 type LoginType = 'child' | 'parent' | 'admin';
 
+// Minimal child type for login UI
+type LoginChild = {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  year_group: string;
+  age?: number;
+};
+
 const ADMIN_TEST_EMAIL = 'steveallan2018@gmail.com';
 
-// Mock children for demo
-const mockChildren = [
+// Mock children for demo (fallback only)
+const fallbackMockChildren: LoginChild[] = [
   { id: '1', name: 'Oliver', avatar: 'fox' as Avatar, year_group: 'Year 3' },
   { id: '2', name: 'Amelia', avatar: 'unicorn' as Avatar, year_group: 'Year 5' },
 ];
@@ -28,11 +37,13 @@ export default function LoginPage() {
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedChild, setSelectedChild] = useState<typeof mockChildren[0] | null>(null);
+  const [children, setChildren] = useState<LoginChild[]>(fallbackMockChildren);
+  const [selectedChild, setSelectedChild] = useState<LoginChild | null>(null);
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [loginType, setLoginType] = useState<LoginType>('child');
   const [error, setError] = useState('');
+  const [familyId, setFamilyId] = useState('');
   const modeParam = searchParams.get('mode');
 
   useEffect(() => {
@@ -42,22 +53,50 @@ export default function LoginPage() {
     }
   }, [modeParam]);
 
+  // Fetch children for the family when email is provided
+  const fetchChildren = async (parentEmail: string) => {
+    try {
+      const res = await fetch('/api/auth/get-children', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: parentEmail }),
+      });
+
+      if (!res.ok) {
+        console.warn('Failed to fetch children, using fallback');
+        setChildren(fallbackMockChildren);
+        return;
+      }
+
+      const data = await res.json();
+      setChildren(data.children || fallbackMockChildren);
+      if (data.family_id) {
+        setFamilyId(data.family_id);
+      }
+    } catch (err) {
+      console.error('Fetch children error:', err);
+      setChildren(fallbackMockChildren);
+    }
+  };
+
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (loginType === 'child') {
+      // Fetch real children from database
+      fetchChildren(email);
       setStep('select-child');
       return;
     }
     setStep('parent-password');
   };
 
-  const handleChildSelect = (child: typeof mockChildren[0]) => {
+  const handleChildSelect = (child: LoginChild) => {
     setSelectedChild(child);
     setStep('pin');
   };
 
-  const handlePinInput = (digit: string) => {
+  const handlePinInput = async (digit: string) => {
     if (loading || pin.length >= 4) {
       return;
     }
@@ -69,11 +108,40 @@ export default function LoginPage() {
     if (newPin.length === 4) {
       setLoading(true);
 
-      window.setTimeout(() => {
-        setLoading(false);
-        setPin('');
+      try {
+        // Validate PIN against database
+        const res = await fetch('/api/auth/validate-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            family_id: familyId || email, // Use family_id from fetch, fallback to email
+            child_id: selectedChild?.id,
+            pin: newPin,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          setError(data.error || 'Invalid PIN');
+          setPin('');
+          setLoading(false);
+          return;
+        }
+
+        const data = await res.json();
+
+        // Store child_id in localStorage (needed by learn page)
+        localStorage.setItem('luminary_child_id', data.child_id);
+        sessionStorage.setItem('luminary_child_id', data.child_id);
+
+        // Redirect to learn page
         router.push('/learn');
-      }, 350);
+      } catch (err) {
+        console.error('PIN validation error:', err);
+        setError('Failed to validate PIN. Please try again.');
+        setPin('');
+        setLoading(false);
+      }
     }
   };
 
@@ -248,24 +316,30 @@ export default function LoginPage() {
               <p className="text-slate-light/70 text-center mb-6">Choose your profile</p>
 
               <div className="space-y-3">
-                {mockChildren.map((child) => (
-                  <motion.button
-                    key={child.id}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleChildSelect(child)}
-                    className="w-full flex items-center gap-4 p-4 rounded-2xl bg-navy/40 border border-white/10 hover:border-amber/30 hover:bg-navy/60 transition-all"
-                  >
-                    <div className="w-14 h-14 rounded-2xl bg-amber/10 flex items-center justify-center text-3xl">
-                      {AVATAR_EMOJI_MAP[child.avatar]}
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-lg font-bold text-white">{child.name}</h3>
-                      <p className="text-sm text-slate-light/60">{child.year_group}</p>
-                    </div>
-                    <ArrowRight size={18} className="ml-auto text-slate-light/40" />
-                  </motion.button>
-                ))}
+                {children.length > 0 ? (
+                  children.map((child) => (
+                    <motion.button
+                      key={child.id}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleChildSelect(child)}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl bg-navy/40 border border-white/10 hover:border-amber/30 hover:bg-navy/60 transition-all"
+                    >
+                      <div className="w-14 h-14 rounded-2xl bg-amber/10 flex items-center justify-center text-3xl">
+                        {AVATAR_EMOJI_MAP[child.avatar]}
+                      </div>
+                      <div className="text-left">
+                        <h3 className="text-lg font-bold text-white">{child.name}</h3>
+                        <p className="text-sm text-slate-light/60">{child.year_group}</p>
+                      </div>
+                      <ArrowRight size={18} className="ml-auto text-slate-light/40" />
+                    </motion.button>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-white/20 bg-white/5 px-4 py-6 text-center text-slate-light/60">
+                    No children found. Please check your email and try again.
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
