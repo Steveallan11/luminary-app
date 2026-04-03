@@ -90,24 +90,123 @@ export default function LearnPage() {
     );
   }
 
-  // 2. No child profile on this device → show onboarding CTA
+  // 2. No child profile on this device → show intro experience
   if (!childId) {
     return (
       <ChildLayout>
         <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <h1 className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>
-              Let's set up your learner
-            </h1>
-            <p className="mt-2 text-sm text-slate-light/70">
-              We couldn't find a learner profile on this device yet.
-            </p>
-            <a
-              href="/auth/onboarding"
-              className="mt-5 inline-flex items-center justify-center rounded-2xl bg-amber px-5 py-3 text-sm font-bold text-navy"
+          <motion.div
+            className="rounded-3xl border border-white/10 bg-gradient-to-br from-amber/10 via-white/5 to-navy-light/60 backdrop-blur-sm p-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            {/* Welcome */}
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4">✨</div>
+              <h1 className="text-3xl font-black text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                Welcome to Luminary
+              </h1>
+              <p className="text-slate-light/70">Your AI-powered learning universe</p>
+            </div>
+
+            {/* Intro missions */}
+            <div className="space-y-4 mb-8">
+              <motion.div
+                className="rounded-2xl border border-amber/30 bg-amber/5 p-4 flex items-start gap-4"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <div className="text-2xl flex-shrink-0">🎯</div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Mission 1: Pick a Subject</h3>
+                  <p className="text-slate-light/60 text-xs mt-1">Explore Maths, English, Science, and more. Choose what you want to learn today.</p>
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="rounded-2xl border border-blue/30 bg-blue/5 p-4 flex items-start gap-4"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="text-2xl flex-shrink-0">💬</div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Meet Lumi, Your AI Tutor</h3>
+                  <p className="text-slate-light/60 text-xs mt-1">Chat with Lumi about any topic. Ask questions, explore concepts, and learn at your own pace.</p>
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="rounded-2xl border border-emerald/30 bg-emerald/5 p-4 flex items-start gap-4"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <div className="text-2xl flex-shrink-0">⭐</div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Earn XP & Build Your Streak</h3>
+                  <p className="text-slate-light/60 text-xs mt-1">Complete lessons, earn experience points, and keep your learning streak alive!</p>
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="rounded-2xl border border-purple/30 bg-purple/5 p-4 flex items-start gap-4"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <div className="text-2xl flex-shrink-0">🏆</div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Unlock Achievements</h3>
+                  <p className="text-slate-light/60 text-xs mt-1">Complete challenges and unlock special achievements as you progress.</p>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* CTA */}
+            <motion.div
+              className="text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
             >
-              Go to onboarding
-            </a>
+              <p className="text-sm text-slate-light/70 mb-4">👇 Pick a subject below to get started!</p>
+              <button
+                onClick={() => {
+                  // Use demo child for intro experience
+                  localStorage.setItem('luminary_child_id', 'intro-demo-child');
+                  window.location.reload();
+                }}
+                className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-amber to-amber-600 px-6 py-3 text-sm font-bold text-navy hover:shadow-lg hover:shadow-amber/50 transition-all"
+              >
+                Start Your Journey ✨
+              </button>
+            </motion.div>
+          </motion.div>
+
+          {/* Subjects preview */}
+          <div className="mt-12">
+            <p className="text-xs text-slate-light/50 uppercase tracking-wider mb-4">Available Subjects</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {SUBJECTS_FALLBACK.slice(0, 4).map((subject, i) => (
+                <motion.div
+                  key={subject.slug}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center hover:border-amber/50 hover:bg-white/10 transition-all cursor-pointer"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 + i * 0.1 }}
+                  onClick={() => {
+                    localStorage.setItem('luminary_child_id', 'intro-demo-child');
+                    window.location.reload();
+                  }}
+                >
+                  <div className="text-3xl mb-2">{subject.icon_emoji}</div>
+                  <p className="text-sm font-semibold text-white">{subject.name}</p>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </ChildLayout>
