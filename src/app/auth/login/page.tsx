@@ -130,9 +130,9 @@ export default function LoginPage() {
 
         const data = await res.json();
 
-        // Store session data in localStorage
-        localStorage.setItem('luminary_session', JSON.stringify(data.sessionData));
-        localStorage.setItem('luminary_child', JSON.stringify(data.child));
+        // Store child_id in localStorage (needed by learn page)
+        localStorage.setItem('luminary_child_id', data.child_id);
+        sessionStorage.setItem('luminary_child_id', data.child_id);
 
         // Redirect to learn page
         router.push('/learn');

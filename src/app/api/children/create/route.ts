@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { getSupabaseServiceClient } from '@/lib/supabase-service';
 
 type CreateChildPayload = {
@@ -9,6 +10,7 @@ type CreateChildPayload = {
     age: number;
     year_group: string;
     avatar: string;
+    pin?: string;
     pin_hash?: string;
   };
 };
@@ -57,7 +59,17 @@ export async function POST(req: Request) {
       familyId = createdFamily.id as string;
     }
 
-    // 2) Create child
+    // 2) Hash PIN if provided
+    let pinHash: string | null = null;
+    if (body.child.pin) {
+      try {
+        pinHash = await bcrypt.hash(body.child.pin, 10);
+      } catch (err) {
+        return NextResponse.json({ error: 'Failed to hash PIN' }, { status: 500 });
+      }
+    }
+
+    // 3) Create child with hashed PIN
     const { data: createdChild, error: childCreateError } = await supabase
       .from('children')
       .insert({
@@ -66,7 +78,7 @@ export async function POST(req: Request) {
         age: body.child.age,
         year_group: body.child.year_group,
         avatar: body.child.avatar,
-        // Note: pin_hash will be added once we wire real pin hashing/verification.
+        pin_hash: pinHash, // Store hashed PIN
       })
       .select('id')
       .single();

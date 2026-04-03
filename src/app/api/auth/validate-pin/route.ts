@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
     // PIN is valid - return child data
     return NextResponse.json({
       success: true,
+      child_id: child.id,
       child: {
         id: child.id,
         name: child.name,
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
         xp_total: child.xp_total,
         streak_days: child.streak_days,
       },
-      // Store in localStorage to maintain session
+      // Session metadata
       sessionData: {
         child_id: child.id,
         family_id: family_id,

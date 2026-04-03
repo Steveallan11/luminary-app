@@ -396,6 +396,7 @@ export default function OnboardingPage() {
                           age: Number(age),
                           year_group: yearGroup,
                           avatar,
+                          pin: pin, // Send the PIN to be hashed and stored
                         },
                       }),
                     });
