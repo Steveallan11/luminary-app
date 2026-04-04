@@ -118,7 +118,6 @@ export async function generateLessonLogic(body: any, jobId: string) {
         create_json: structure.create_json,
         check_json: structure.check_json,
         celebrate_json: structure.celebrate_json,
-        personalisation_hooks: structure.personalisation_hooks ?? null,
         quality_score: qualityScore,
         game_type: structure.game_type,
         game_content: structure.game_content,
