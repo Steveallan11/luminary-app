@@ -25,6 +25,21 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+
+# dev server artifacts
+.tmp-dev-server.*
+
+# local temp/debug outputs
+debug.log*
+*.local.log
+*.tmp.log
+*.err.log
+*.out.log
+
+# verification artifacts
+verification.*
+/verification/
 
 # vercel
 .vercel

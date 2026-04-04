@@ -111,6 +111,7 @@ export async function generateLessonLogic(body: any, jobId: string) {
         game_content: structure.game_content,
         concept_card_json: structure.concept_card_json,
         realworld_json: structure.realworld_json,
+        personalisation_hooks: structure.personalisation_hooks ?? null,
         quality_score: qualityScore,
       }, { onConflict: 'topic_id,age_group,version' })
       .select()

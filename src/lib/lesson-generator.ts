@@ -54,6 +54,7 @@ export interface GeneratedLessonStructure {
     everyday: { title: string; description: string };
     inspiring: { title: string; description: string };
   };
+  personalisation_hooks?: Record<string, unknown> | null;
 }
 
 function buildGenerationPrompt(brief: TopicBrief): string {

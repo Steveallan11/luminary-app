@@ -231,7 +231,7 @@ export default function MediaPicker({
             type="text"
             value={lumiInstruction}
             onChange={(e) => setLumiInstruction(e.target.value)}
-            placeholder={`e.g. "Show this when explaining ${topic} to help children visualise it"`}
+            placeholder={`e.g. &quot;Show this when explaining ${topic} to help children visualise it&quot;`}
             className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm border border-gray-600 focus:border-amber-500 focus:outline-none placeholder-gray-500"
           />
         </div>
@@ -241,7 +241,7 @@ export default function MediaPicker({
           {!hasSearched && (
             <div className="flex flex-col items-center justify-center h-48 text-center">
               <Sparkles className="w-12 h-12 text-amber-400/40 mb-3" />
-              <p className="text-gray-400 text-sm">Click "Lumi Search" to find the best media for this phase</p>
+              <p className="text-gray-400 text-sm">Click &ldquo;Lumi Search&rdquo; to find the best media for this phase</p>
               <p className="text-gray-500 text-xs mt-1">Lumi will suggest images, videos, and GIFs that make the lesson exciting</p>
             </div>
           )}
