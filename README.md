@@ -272,6 +272,9 @@ First Step, Subject Explorer, Getting Started, On a Roll, Unstoppable, Legend, D
 - `diagram_components` — Interactive diagram configurations and data
 - `game_sessions` — Individual game play records with scores and answers
 
+#### Seeding live lessons
+`node scripts/seed_db.ts` now seeds the MVP subjects/topics _and_ inserts full `topic_lesson_structures` plus `topic_assets` for the seeded topics (`fractions`, `number-sense`, `phonics`, `reading`, `life-cycles`, `states-of-matter`). Run it to populate Supabase with working arcs and assets before you test the lesson engine.
+
 ## Project Structure
 
 ```

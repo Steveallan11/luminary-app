@@ -20,6 +20,10 @@ import {
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
 import { getSupabaseServiceClient } from '@/lib/supabase-service';
 
+function logLessonFallback(message: string, error?: unknown) {
+  console.warn(`[lesson-engine] ${message}`, error instanceof Error ? error.message : error ?? '');
+}
+
 export interface LessonStartResult {
   state: 'live' | 'generating';
   topic: Topic;
@@ -191,8 +195,8 @@ export async function startLesson(
       }
       manifestAssets = await fetchTopicAssetsFromSupabase(supabase, topic.id);
     }
-  } catch {
-    // Supabase unavailable or missing data - fall back to mock data
+  } catch (error) {
+    logLessonFallback('Supabase lesson fetch failed, falling back to mock data', error);
   }
 
   if (!topic) return null;
