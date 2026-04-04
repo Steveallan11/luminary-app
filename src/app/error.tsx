@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { motion } from 'framer-motion';
 import { AlertCircle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
@@ -12,6 +14,10 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   return (
     <div className="min-h-screen bg-navy flex items-center justify-center px-4">
       <motion.div

@@ -132,6 +132,7 @@ pnpm start
 | `/api/content/generate-worksheet` | GET | Generates printable worksheet PDF |
 | `/api/admin/generate-content` | POST | AI batch content generation for topics |
 | `/api/admin/generate-images` | POST | DALL-E 3 image generation for content assets |
+| `/api/_diag/error` | GET | Diagnostic endpoint that intentionally throws for Sentry verification |
 
 ## Lumi — The AI Tutor
 

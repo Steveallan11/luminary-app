@@ -99,6 +99,13 @@ export async function POST(req: NextRequest) {
       throw new Error(`Failed to queue generation: ${error.message}`);
     }
 
+    await supabase
+      .from('topics')
+      .update({
+        lesson_generation_status: 'generating',
+      })
+      .eq('id', safeTopicId);
+
     if (type === 'lesson') {
       // Run lesson generation synchronously — Vercel will keep the function alive
       // for up to maxDuration seconds, so Claude has time to respond.

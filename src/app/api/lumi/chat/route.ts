@@ -1,18 +1,18 @@
 import { NextRequest } from 'next/server';
 import { getAnthropicClient, LUMI_MODEL, LUMI_MAX_TOKENS } from '@/lib/anthropic';
-import { generateHintPrompt, generateLumiSystemPrompt } from '@/lib/lumi-prompt';
-import { MOCK_CHILD, MOCK_SUBJECTS } from '@/lib/mock-data';
+import { generateHintPrompt } from '@/lib/lumi-prompt';
 import {
-  buildContentManifest,
-  findTopicBySlug,
-  getLessonStructureForTopic,
-  getMockPhaseTracking,
+  buildLiveLumiPrompt,
+  getErrorMessage,
+  getErrorResponseStatus,
+} from '@/lib/live-lesson-data';
+import {
   getNextPhase,
   parseContentSignals,
-  parsePhaseSignal,
   parseImageSignals,
+  parsePhaseSignal,
   stripAllSignals,
-} from '@/lib/lesson-engine';
+} from '@/lib/lesson-runtime';
 import { LessonPhase } from '@/types';
 
 interface ChatMessage {
@@ -31,7 +31,6 @@ interface ChatRequest {
   mastery_score?: number;
   current_phase?: LessonPhase;
   prior_knowledge?: string;
-  // Admin test mode
   admin_mode?: boolean;
   admin_system_prompt?: string;
 }
@@ -40,6 +39,8 @@ export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
     const {
+      child_id,
+      topic_id,
       subject_slug,
       topic_slug,
       messages,
@@ -56,85 +57,57 @@ export async function POST(request: NextRequest) {
     let activePhase: LessonPhase;
 
     if (admin_mode && admin_system_prompt) {
-      // Admin test mode: use the provided system prompt directly, skip mock data lookup
       systemPrompt = admin_system_prompt;
       activePhase = current_phase ?? 'spark';
     } else {
-      // Normal child mode: use mock data and generate standard Lumi prompt
-      const child = MOCK_CHILD;
-      const subject = MOCK_SUBJECTS.find((s) => s.slug === subject_slug);
-      const topic = findTopicBySlug(subject_slug, topic_slug);
-
-      if (!subject || !topic) {
-        return new Response(JSON.stringify({ error: 'Subject or topic not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
+      if (!child_id || !topic_id || !subject_slug || !topic_slug || !session_id) {
+        return new Response(
+          JSON.stringify({ error: 'child_id, topic_id, subject_slug, topic_slug and session_id are required' }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
       }
 
-      const phaseTracking = getMockPhaseTracking(session_id);
-      activePhase = current_phase ?? phaseTracking.current_phase;
-      const structure = getLessonStructureForTopic(topic.id, child.age);
-      const contentManifest = buildContentManifest(topic.id);
-
-      systemPrompt = generateLumiSystemPrompt({
-        child_name: child.name,
-        child_age: child.age,
-        subject_name: subject.name,
-        topic_title: topic.title,
-        topic_description: topic.description,
-        previous_struggles: prior_knowledge ? [prior_knowledge] : [],
-        mastery_score: mastery_score ?? 0,
-        content_manifest: contentManifest,
-        structure,
-        current_phase: activePhase,
+      const livePrompt = await buildLiveLumiPrompt({
+        childId: child_id,
+        topicId: topic_id,
+        subjectSlug: subject_slug,
+        topicSlug: topic_slug,
+        sessionId: session_id,
+        masteryScore: mastery_score,
+        currentPhase: current_phase,
+        priorKnowledge: prior_knowledge,
       });
+
+      systemPrompt = livePrompt.systemPrompt;
+      activePhase = livePrompt.activePhase;
     }
 
-    const claudeMessages: ChatMessage[] = messages.map((m) => ({
-      role: m.role,
-      content: m.content,
+    const claudeMessages: ChatMessage[] = messages.map((message) => ({
+      role: message.role,
+      content: message.content,
     }));
 
     if (is_hint && claudeMessages.length > 0) {
-      const lastMsg = claudeMessages[claudeMessages.length - 1];
+      const lastMessage = claudeMessages[claudeMessages.length - 1];
       const hintInstruction = generateHintPrompt(activePhase);
-      if (lastMsg.role === 'user') {
-        lastMsg.content = `${lastMsg.content}\n\n[SYSTEM: ${hintInstruction}]`;
+      if (lastMessage.role === 'user') {
+        lastMessage.content = `${lastMessage.content}\n\n[SYSTEM: ${hintInstruction}]`;
       } else {
         claudeMessages.push({ role: 'user', content: `[SYSTEM: ${hintInstruction}]` });
       }
     }
 
-    // If no Anthropic API key, return a mock stream so the UI doesn't crash
     if (!process.env.ANTHROPIC_API_KEY) {
-      const lastUserMsg = messages[messages.length - 1]?.content ?? '';
-      const mockResponses = [
-        `Hey there! ✨ Great question! I'm Lumi, your learning buddy. I can see you're thinking about "${lastUserMsg.slice(0, 40)}..." — that's brilliant! To get me fully powered up, an Anthropic API key needs to be added to the environment. But the app is working perfectly! 🚀`,
-        `Ooh, I love that you're curious! 🌟 Once the Anthropic API key is connected, I'll be able to give you a proper answer and take you through the full lesson. You're going to love it!`,
-        `Great thinking! 💡 I'm running in demo mode right now — the real Lumi is even more fun and will walk you through everything step by step. Almost there!`,
-      ];
-      const mockText = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-      const encoder2 = new TextEncoder();
-      const mockStream = new ReadableStream({
-        async start(controller) {
-          const words = mockText.split(' ');
-          for (const word of words) {
-            controller.enqueue(encoder2.encode(`data: ${JSON.stringify({ text: word + ' ' })}\n\n`));
-            await new Promise((r) => setTimeout(r, 25));
-          }
-          controller.enqueue(encoder2.encode(`data: ${JSON.stringify({ phase: activePhase })}\n\n`));
-          controller.enqueue(encoder2.encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-      return new Response(mockStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-        },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Lumi chat is unavailable because ANTHROPIC_API_KEY is not configured' }),
+        {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const client = getAnthropicClient();
@@ -152,13 +125,11 @@ export async function POST(request: NextRequest) {
           let combinedText = '';
 
           for await (const event of stream) {
-            if (
-              event.type === 'content_block_delta' &&
-              event.delta.type === 'text_delta'
-            ) {
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
               combinedText += event.delta.text;
-              const chunk = `data: ${JSON.stringify({ text: event.delta.text })}\n\n`;
-              controller.enqueue(encoder.encode(chunk));
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`)
+              );
             }
           }
 
@@ -166,7 +137,9 @@ export async function POST(request: NextRequest) {
           const phaseSignal = parsePhaseSignal(combinedText);
           const imageSignals = parseImageSignals(combinedText);
           const cleanText = stripAllSignals(combinedText);
-          const resolvedPhase = phaseSignal?.phase ?? (cleanText.length > 200 ? getNextPhase(activePhase) : activePhase);
+          const resolvedPhase =
+            phaseSignal?.phase ??
+            (cleanText.length > 200 ? getNextPhase(activePhase) : activePhase);
 
           if (cleanText !== combinedText) {
             controller.enqueue(
@@ -191,10 +164,11 @@ export async function POST(request: NextRequest) {
           );
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Stream error';
+        } catch (error) {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: errorMsg })}\n\n`)
+            encoder.encode(
+              `data: ${JSON.stringify({ error: getErrorMessage(error, 'Stream error') })}\n\n`
+            )
           );
           controller.close();
         }
@@ -209,10 +183,12 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: getErrorMessage(error, 'Internal server error') }),
+      {
+        status: getErrorResponseStatus(error),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 }

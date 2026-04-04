@@ -83,15 +83,27 @@ export default function ParentDashboard() {
     setIsDownloading(true);
     setShowReportMenu(false);
     try {
-      const url = `/api/reports/generate?child_id=${child.id}&period=${period}`;
+      const liveChildId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('luminary_child_id') ?? sessionStorage.getItem('luminary_child_id')
+          : null;
+      const childId = liveChildId || child.id;
+      const url = `/api/reports/generate?child_id=${encodeURIComponent(childId)}&period=${period}`;
       const response = await fetch(url);
-      const html = await response.text();
-      const blob = new Blob([html], { type: 'text/html' });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'Could not generate LA report PDF.');
+      }
+
+      const blob = await response.blob();
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `Luminary-LA-Report-${child.name.replace(/ /g, '-')}-${period}-${new Date().toISOString().split('T')[0]}.html`;
+      link.download = `Luminary-LA-Report-${child.name.replace(/ /g, '-')}-${period}-${new Date().toISOString().split('T')[0]}.pdf`;
       link.click();
       URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error('LA report download failed:', error);
     } finally {
       setIsDownloading(false);
     }

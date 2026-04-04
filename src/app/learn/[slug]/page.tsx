@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Lock, Play, Clock, X, Star, Zap, Loader2 } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import Button from '@/components/ui/Button';
-import { MOCK_SUBJECTS, MOCK_TOPICS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { TopicStatus, Topic } from '@/types';
 import type { Subject } from '@/types';
 
@@ -25,38 +24,70 @@ export default function SubjectPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [rawProgress, setRawProgress] = useState<Record<string, { status: TopicStatus; mastery_score: number }>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const childId = getChildIdFromStorage();
-    const params = childId ? `?child_id=${childId}` : '';
+    let cancelled = false;
 
-    fetch(`/api/learn/subjects${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const foundSubject = (data.subjects || MOCK_SUBJECTS).find((s: Subject) => s.slug === slug);
-        setSubject(foundSubject || MOCK_SUBJECTS.find((s) => s.slug === slug) || null);
+    async function loadSubject() {
+      setIsLoading(true);
+      setError(null);
 
-        const allTopics = data.topics || Object.values(MOCK_TOPICS).flat();
-        const subjectTopics = allTopics
-          .filter((t: Topic) => {
-            if (foundSubject) return t.subject_id === foundSubject.id;
-            return (MOCK_TOPICS[slug] || []).some((mt) => mt.id === t.id);
-          })
-          .sort((a: Topic, b: Topic) => (a.order_index || 0) - (b.order_index || 0));
+      const childId = getChildIdFromStorage();
+      if (!childId) {
+        if (!cancelled) {
+          setError('Learner session missing. Log in again to continue.');
+          setIsLoading(false);
+        }
+        return;
+      }
 
-        setTopics(subjectTopics.length > 0 ? subjectTopics : MOCK_TOPICS[slug] || []);
+      try {
+        const response = await fetch(`/api/learn/subjects?child_id=${encodeURIComponent(childId)}`);
+        const data = await response.json().catch(() => null) as {
+          subjects?: Subject[];
+          topics?: Topic[];
+          progress?: Record<string, Record<string, { status: TopicStatus; mastery_score: number }>>;
+          error?: string;
+        } | null;
 
-        const subjectProgress = data.progress?.[slug] || MOCK_TOPIC_PROGRESS[slug] || {};
-        setRawProgress(subjectProgress as any);
-        setIsLoading(false);
-      })
-      .catch(() => {
-        // Full fallback to mock data
-        setSubject(MOCK_SUBJECTS.find((s) => s.slug === slug) || null);
-        setTopics(MOCK_TOPICS[slug] || []);
-        setRawProgress((MOCK_TOPIC_PROGRESS[slug] || {}) as any);
-        setIsLoading(false);
-      });
+        if (!response.ok || !data?.subjects || !data?.topics) {
+          throw new Error(data?.error || 'Could not load this subject.');
+        }
+
+        const foundSubject = data.subjects.find((entry) => entry.slug === slug) ?? null;
+        if (!foundSubject) {
+          throw new Error('Subject not found.');
+        }
+
+        const subjectTopics = data.topics
+          .filter((entry) => entry.subject_id === foundSubject.id)
+          .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+        if (!cancelled) {
+          setSubject(foundSubject);
+          setTopics(subjectTopics);
+          setRawProgress((data.progress?.[slug] || {}) as Record<string, { status: TopicStatus; mastery_score: number }>);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSubject(null);
+          setTopics([]);
+          setRawProgress({});
+          setError(err instanceof Error ? err.message : 'Could not load this subject.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadSubject();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   // Build data-driven progress with sequential unlock logic
@@ -98,8 +129,20 @@ export default function SubjectPage() {
   if (!subject) {
     return (
       <ChildLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <p className="text-slate-light">Subject not found</p>
+        <div className="px-4 sm:px-6 lg:px-8 py-10 max-w-3xl mx-auto">
+          <div className="rounded-3xl border border-rose-500/20 bg-rose-500/10 p-6">
+            <h1 className="text-2xl font-black text-white" style={{ fontFamily: 'var(--font-display)' }}>
+              Can&apos;t open this subject
+            </h1>
+            <p className="mt-2 text-sm text-slate-light/70">
+              {error || 'The subject could not be found in Supabase.'}
+            </p>
+            <div className="mt-5">
+              <Link href="/learn">
+                <Button variant="secondary">Back to learning world</Button>
+              </Link>
+            </div>
+          </div>
         </div>
       </ChildLayout>
     );

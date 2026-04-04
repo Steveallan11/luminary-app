@@ -1,14 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabaseEnv } from '@/lib/supabase-env';
 
 export function getSupabaseServiceClient() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const { url, serviceRoleKey } = getServiceSupabaseEnv();
 
-  if (!url || !key) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) or SUPABASE_SERVICE_ROLE_KEY');
-  }
-
-  return createClient(url, key, {
+  return createClient(url, serviceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

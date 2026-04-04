@@ -28,6 +28,12 @@ export interface LumiPromptParams {
   structure?: TopicLessonStructure | null;
   current_phase?: LessonPhase;
   visual_images?: VisualLumiImage[];
+  knowledge_base_entries?: Array<{
+    title: string;
+    content_type: string;
+    summary: string;
+    key_concepts: string[];
+  }>;
 }
 
 function getAgeCalibration(age: number): {
@@ -134,6 +140,38 @@ function buildGameResultsSection(results: { game_type: string; score: number; ma
   return lines.join('\n');
 }
 
+function buildKnowledgeBaseSection(
+  entries: Array<{
+    title: string;
+    content_type: string;
+    summary: string;
+    key_concepts: string[];
+  }>
+): string {
+  if (!entries || entries.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('╔═══ LESSON KNOWLEDGE BASE ═══');
+  lines.push('');
+  lines.push('Use this lesson-specific reference context to improve factual accuracy and explanation quality.');
+  lines.push('Only cite relevant entries naturally in teaching language; do not list raw metadata to the child.');
+  lines.push('');
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    lines.push(`[KB ${i + 1}] ${entry.title} (${entry.content_type})`);
+    if (entry.summary) {
+      lines.push(`Summary: ${entry.summary}`);
+    }
+    if (entry.key_concepts.length > 0) {
+      lines.push(`Key concepts: ${entry.key_concepts.join(', ')}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
 function buildLessonStructureSection(
   structure: TopicLessonStructure | null | undefined,
   currentPhase: LessonPhase | undefined
@@ -197,6 +235,9 @@ export function generateLumiSystemPrompt(params: LumiPromptParams): string {
   const visualSection = params.visual_images?.length ? '\n\n' + buildVisualLumiSection(params.visual_images) : '';
   const gameResultsSection = game_results ? buildGameResultsSection(game_results) : '';
   const lessonArcSection = '\n\n' + buildLessonStructureSection(structure, current_phase);
+  const knowledgeBaseSection = params.knowledge_base_entries?.length
+    ? '\n\n' + buildKnowledgeBaseSection(params.knowledge_base_entries)
+    : '';
 
   return `You are Lumi, a warm and brilliant learning companion for ${child_name}, who is ${child_age} years old. You are their personal tutor for ${subject_name}, and right now you're exploring the topic: ${topic_title}.
 
@@ -224,7 +265,7 @@ Your teaching approach:
 
 ═══ PRIOR CONTEXT ═══
 
-Things ${child_name} has found challenging before: ${strugglesText}. Be especially patient and encouraging if these come up. Their current mastery score for this topic: ${mastery_score}/100.${lessonArcSection}${contentSection}${visualSection}${gameResultsSection}
+Things ${child_name} has found challenging before: ${strugglesText}. Be especially patient and encouraging if these come up. Their current mastery score for this topic: ${mastery_score}/100.${lessonArcSection}${contentSection}${visualSection}${gameResultsSection}${knowledgeBaseSection}
 
 ═══ CHILD SAFETY (NON-NEGOTIABLE) ═══
 

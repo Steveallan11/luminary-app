@@ -16,11 +16,12 @@ type LoginType = 'child' | 'parent' | 'admin';
 
 const ADMIN_TEST_EMAIL = 'steveallan2018@gmail.com';
 
-// Mock children for demo
-const mockChildren = [
-  { id: '1', name: 'Oliver', avatar: 'fox' as Avatar, year_group: 'Year 3' },
-  { id: '2', name: 'Amelia', avatar: 'unicorn' as Avatar, year_group: 'Year 5' },
-];
+type LearnerProfile = {
+  id: string;
+  name: string;
+  avatar: Avatar;
+  year_group: string;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,7 +29,8 @@ export default function LoginPage() {
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedChild, setSelectedChild] = useState<typeof mockChildren[0] | null>(null);
+  const [children, setChildren] = useState<LearnerProfile[]>([]);
+  const [selectedChild, setSelectedChild] = useState<LearnerProfile | null>(null);
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [loginType, setLoginType] = useState<LoginType>('child');
@@ -42,22 +44,42 @@ export default function LoginPage() {
     }
   }, [modeParam]);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
+
     if (loginType === 'child') {
-      setStep('select-child');
+      try {
+        const response = await fetch(`/api/auth/learner-profiles?parent_email=${encodeURIComponent(email.trim().toLowerCase())}`);
+        const data = await response.json().catch(() => null) as { children?: LearnerProfile[]; error?: string } | null;
+
+        if (!response.ok || !data?.children?.length) {
+          setError(data?.error || 'We could not find learner profiles for that parent email.');
+          return;
+        }
+
+        setChildren(data.children);
+        sessionStorage.setItem('luminary_parent_email', email.trim().toLowerCase());
+        setStep('select-child');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
+
+    setLoading(false);
     setStep('parent-password');
   };
 
-  const handleChildSelect = (child: typeof mockChildren[0]) => {
+  const handleChildSelect = (child: LearnerProfile) => {
     setSelectedChild(child);
+    setPin('');
+    setError('');
     setStep('pin');
   };
 
-  const handlePinInput = (digit: string) => {
+  const handlePinInput = async (digit: string) => {
     if (loading || pin.length >= 4) {
       return;
     }
@@ -69,11 +91,32 @@ export default function LoginPage() {
     if (newPin.length === 4) {
       setLoading(true);
 
-      window.setTimeout(() => {
-        setLoading(false);
+      try {
+        const response = await fetch('/api/auth/learner-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            parent_email: email.trim().toLowerCase(),
+            child_id: selectedChild?.id,
+            pin: newPin,
+          }),
+        });
+
+        const data = await response.json().catch(() => null) as { child?: LearnerProfile; error?: string } | null;
+        if (!response.ok || !data?.child?.id) {
+          setError(data?.error || 'Learner login failed.');
+          setPin('');
+          return;
+        }
+
+        localStorage.setItem('luminary_child_id', data.child.id);
+        sessionStorage.setItem('luminary_child_id', data.child.id);
+        sessionStorage.setItem('luminary_parent_email', email.trim().toLowerCase());
         setPin('');
         router.push('/learn');
-      }, 350);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -208,7 +251,7 @@ export default function LoginPage() {
                   </p>
                 )}
                 <Button type="submit" variant="primary" size="lg" className="w-full gap-2">
-                  Continue <ArrowRight size={18} />
+                  {loading ? 'Loading...' : <>Continue <ArrowRight size={18} /></>}
                 </Button>
               </form>
 
@@ -248,7 +291,7 @@ export default function LoginPage() {
               <p className="text-slate-light/70 text-center mb-6">Choose your profile</p>
 
               <div className="space-y-3">
-                {mockChildren.map((child) => (
+                {children.map((child) => (
                   <motion.button
                     key={child.id}
                     whileHover={{ scale: 1.02 }}
@@ -297,7 +340,7 @@ export default function LoginPage() {
                   Hi, {selectedChild.name}!
                 </h2>
                 <p className="text-slate-light/70">Enter your secret PIN</p>
-                <p className="text-xs text-slate-light/50 mt-2">Demo mode: any 4 digits will take you into your learning world.</p>
+                <p className="text-xs text-slate-light/50 mt-2">Use the 4-digit PIN set during onboarding.</p>
               </div>
 
               {/* PIN dots */}

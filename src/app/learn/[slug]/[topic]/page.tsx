@@ -20,12 +20,9 @@ import {
 import Starfield from '@/components/ui/Starfield';
 import Button from '@/components/ui/Button';
 import ContentRenderer from '@/components/content/ContentRenderer';
-import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPICS, LESSON_PHASE_LABELS } from '@/lib/mock-data';
 import { clampMastery, detectCorrectResponse, detectExplanation } from '@/lib/mastery';
-import { getXPLevel, LessonPhase, ParsedContentSignal } from '@/types';
-import { buildContentManifest, getTopicProgress } from '@/lib/lesson-engine';
+import { Child, DiagramComponent, getXPLevel, LessonPhase, ParsedContentSignal, Subject, Topic, TopicAsset, TopicStatus } from '@/types';
 import { createClient as createSupabaseBrowserClient } from '@/lib/supabase';
-import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
 
 // ── Child profile helper ─────────────────────────────────────────────────────
 function getChildIdFromStorage(): string | null {
@@ -46,6 +43,15 @@ interface ChatMessage {
 type SessionState = 'booting' | 'generating' | 'loading' | 'chatting' | 'ending' | 'summary';
 
 const PHASE_ORDER: LessonPhase[] = ['spark', 'explore', 'anchor', 'practise', 'create', 'check', 'celebrate'];
+const LESSON_PHASE_LABELS: Record<LessonPhase, string> = {
+  spark: 'Spark',
+  explore: 'Explore',
+  anchor: 'Anchor',
+  practise: 'Practise',
+  create: 'Create',
+  check: 'Check',
+  celebrate: 'Celebrate',
+};
 
 export default function LessonPage() {
   const params = useParams();
@@ -53,36 +59,22 @@ export default function LessonPage() {
   const slug = params.slug as string;
   const topicSlug = params.topic as string;
 
-  const [activeChild, setActiveChild] = useState(MOCK_CHILD);
-  const [liveSubjects, setLiveSubjects] = useState(MOCK_SUBJECTS);
-  const [liveTopics, setLiveTopics] = useState(MOCK_TOPICS[slug] || []);
+  const [activeChild, setActiveChild] = useState<Child>(null as unknown as Child);
+  const [liveSubjects, setLiveSubjects] = useState<Subject[]>([]);
+  const [liveTopics, setLiveTopics] = useState<Topic[]>([]);
+  const [contentAssets, setContentAssets] = useState<TopicAsset[]>([]);
+  const [diagrams, setDiagrams] = useState<DiagramComponent[]>([]);
+  const [pageLoadError, setPageLoadError] = useState<string | null>(null);
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [persistedTopicProgress, setPersistedTopicProgress] = useState<{ status: TopicStatus; mastery_score: number } | null>(null);
 
-  // Load live data on mount
-  useEffect(() => {
-    const childId = getChildIdFromStorage();
-    const qp = childId ? `?child_id=${childId}` : '';
-    fetch(`/api/learn/subjects${qp}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.subjects?.length) setLiveSubjects(data.subjects);
-        if (data.topics?.length) {
-          const subjectObj = data.subjects?.find((s: any) => s.slug === slug);
-          const filtered = data.topics.filter((t: any) => t.subject_id === subjectObj?.id);
-          if (filtered.length) setLiveTopics(filtered);
-        }
-      })
-      .catch(() => {});
-    if (childId) {
-      fetch(`/api/learn/child-profile?child_id=${childId}`)
-        .then((r) => r.json())
-        .then((data) => { if (data.child) setActiveChild(data.child); })
-        .catch(() => {});
-    }
-  }, [slug]);
-
-  const subject = liveSubjects.find((s) => s.slug === slug) || MOCK_SUBJECTS.find((s) => s.slug === slug);
-  const topics = liveTopics.length > 0 ? liveTopics : (MOCK_TOPICS[slug] || []);
-  const topic = topics.find((t) => t.slug === topicSlug);
+  const subject = liveSubjects.find((entry) => entry.slug === slug) ?? null;
+  const topics = subject
+    ? liveTopics
+        .filter((entry) => entry.subject_id === subject.id)
+        .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    : [];
+  const topic = topics.find((entry) => entry.slug === topicSlug) ?? null;
   const subjectColour = subject?.colour_hex ?? '#8B5CF6';
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -107,7 +99,7 @@ export default function LessonPage() {
   const [error, setError] = useState<string | null>(null);
   const [generationMessage, setGenerationMessage] = useState('Lumi is preparing your personalised lesson…');
   const [generationProgress, setGenerationProgress] = useState(0.15);
-  const [generatedManifest, setGeneratedManifest] = useState(() => (topic ? buildContentManifest(topic.id) : undefined));
+  const [generatedManifest, setGeneratedManifest] = useState<Record<string, unknown> | undefined>(undefined);
   const [completionBurst, setCompletionBurst] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -117,24 +109,100 @@ export default function LessonPage() {
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const [elapsedMinutes, setElapsedMinutes] = useState(0);
 
-  const contentAssets = useMemo(() => {
-    if (!topic) return [];
-    return MOCK_TOPIC_ASSETS.filter((asset) => asset.topic_id === topic.id);
-  }, [topic]);
+  const topicProgress = persistedTopicProgress ?? { status: 'available' as TopicStatus, mastery_score: 0 };
 
-  const diagrams = useMemo(() => {
-    if (!topic) return [];
-    return [MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE].filter((diagram) => diagram.topic_id === topic.id);
-  }, [topic]);
+  useEffect(() => {
+    let cancelled = false;
 
-  const topicProgress = getTopicProgress(slug, topicSlug);
+    async function loadLessonContext() {
+      setIsPageLoading(true);
+      setPageLoadError(null);
+
+      const childId = getChildIdFromStorage();
+      if (!childId) {
+        if (!cancelled) {
+          setPageLoadError('Learner session missing. Log in again to continue.');
+          setIsPageLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const [subjectsResponse, childResponse] = await Promise.all([
+          fetch(`/api/learn/subjects?child_id=${encodeURIComponent(childId)}`),
+          fetch(`/api/learn/child-profile?child_id=${encodeURIComponent(childId)}`),
+        ]);
+
+        const subjectsData = await subjectsResponse.json().catch(() => null) as {
+          subjects?: Subject[];
+          topics?: Topic[];
+          progress?: Record<string, Record<string, { status: TopicStatus; mastery_score: number }>>;
+          error?: string;
+        } | null;
+        const childData = await childResponse.json().catch(() => null) as { child?: Child; error?: string } | null;
+
+        if (!subjectsResponse.ok || !subjectsData?.subjects || !subjectsData?.topics) {
+          throw new Error(subjectsData?.error || 'Could not load lesson subjects.');
+        }
+
+        if (!childResponse.ok || !childData?.child) {
+          throw new Error(childData?.error || 'Could not load learner profile.');
+        }
+
+        const resolvedSubject = subjectsData.subjects.find((entry) => entry.slug === slug);
+        if (!resolvedSubject) {
+          throw new Error('Subject not found.');
+        }
+
+        const resolvedTopics = subjectsData.topics.filter((entry) => entry.subject_id === resolvedSubject.id);
+        const resolvedTopic = resolvedTopics.find((entry) => entry.slug === topicSlug);
+        if (!resolvedTopic) {
+          throw new Error('Topic not found.');
+        }
+
+        const assetsResponse = await fetch(`/api/learn/topic-assets?topic_id=${encodeURIComponent(resolvedTopic.id)}`);
+        const assetsData = await assetsResponse.json().catch(() => null) as {
+          assets?: TopicAsset[];
+          diagrams?: DiagramComponent[];
+          error?: string;
+        } | null;
+
+        if (!assetsResponse.ok) {
+          throw new Error(assetsData?.error || 'Could not load lesson content assets.');
+        }
+
+        if (!cancelled) {
+          setActiveChild(childData.child);
+          setLiveSubjects(subjectsData.subjects);
+          setLiveTopics(resolvedTopics);
+          setContentAssets(assetsData?.assets ?? []);
+          setDiagrams(assetsData?.diagrams ?? []);
+          setPersistedTopicProgress(subjectsData.progress?.[slug]?.[topicSlug] ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPageLoadError(err instanceof Error ? err.message : 'Could not load this lesson.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPageLoading(false);
+        }
+      }
+    }
+
+    void loadLessonContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, topicSlug]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (subject && topic) {
+    if (activeChild && subject && topic && !pageLoadError) {
       void bootstrapLesson();
     }
     return () => {
@@ -145,7 +213,7 @@ export default function LessonPage() {
         realtimeChannelRef.current = null;
       }
     };
-  }, [subject, topic]);
+  }, [activeChild, subject, topic, pageLoadError]);
 
   const awardXp = (amount: number) => {
     if (amount <= 0) return;
@@ -155,6 +223,8 @@ export default function LessonPage() {
   };
 
   const bootstrapLesson = async () => {
+    if (!activeChild || !topic) return;
+
     setSessionState('booting');
     setError(null);
 
@@ -163,7 +233,7 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: activeChild.id,
+          child_id: activeChild!.id,
           subject_slug: slug,
           topic_slug: topicSlug,
         }),
@@ -198,16 +268,7 @@ export default function LessonPage() {
       await fetchOpeningMessage(startData.lesson.sessionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start lesson');
-      setMessages([
-        {
-          id: `msg-${Date.now()}`,
-          role: 'assistant',
-          content: `Hey ${activeChild.name}! ✨ I’m Lumi, and I’m ready to explore ${topic?.title} with you. What do you already know about it?`,
-          timestamp: new Date(),
-          phase: 'spark',
-        },
-      ]);
-      setSessionState('chatting');
+      setSessionState('loading');
     }
   };
 
@@ -262,7 +323,7 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: activeChild.id,
+          child_id: activeChild!.id,
           session_id: activeSessionId,
           subject_slug: slug,
           topic_slug: topicSlug,
@@ -286,14 +347,14 @@ export default function LessonPage() {
     } catch (err) {
       if (generationRef.current) clearInterval(generationRef.current);
       setError(err instanceof Error ? err.message : 'Failed to generate lesson');
-      setSessionState('chatting');
+      setSessionState('loading');
     }
   };
 
   const fetchOpeningMessage = async (activeSessionId?: string, afterGeneration: boolean = false) => {
     setSessionState('loading');
     try {
-      const res = await fetch(`/api/lumi/opening-message?child_id=${activeChild.id}&subject_slug=${slug}&topic_slug=${topicSlug}`);
+      const res = await fetch(`/api/lumi/opening-message?child_id=${activeChild!.id}&subject_slug=${slug}&topic_slug=${topicSlug}&session_id=${encodeURIComponent(activeSessionId ?? sessionId)}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to get opening message');
@@ -317,16 +378,7 @@ export default function LessonPage() {
       setSessionState('chatting');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start lesson');
-      setMessages([
-        {
-          id: `msg-${Date.now()}`,
-          role: 'assistant',
-          content: `Hey ${activeChild.name}! ✨ I’m Lumi, your learning buddy! Today we’re exploring ${topic?.title}. Before we dive in, what do you think you already know?`,
-          timestamp: new Date(),
-          phase: 'spark',
-        },
-      ]);
-      setSessionState('chatting');
+      setSessionState('loading');
     }
   };
 
@@ -357,7 +409,7 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: activeChild.id,
+          child_id: activeChild!.id,
           topic_id: topic?.id,
           subject_slug: slug,
           topic_slug: topicSlug,
@@ -434,9 +486,10 @@ export default function LessonPage() {
         }
       }
     } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get response from Lumi');
       updateAssistantMessage(assistantMsgId, (message) => ({
         ...message,
-        content: "Oops! I had a little hiccup there. Could you try saying that again? I'm all ears! 👂✨",
+        content: 'Lumi could not respond because the live chat request failed. Please try again.',
       }));
     } finally {
       setIsStreaming(false);
@@ -477,7 +530,7 @@ export default function LessonPage() {
   };
 
   const handleEndSession = useCallback(async () => {
-    if (sessionState === 'ending' || sessionState === 'summary') return;
+    if (!activeChild || !topic || sessionState === 'ending' || sessionState === 'summary') return;
     setSessionState('ending');
 
     try {
@@ -485,13 +538,13 @@ export default function LessonPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          child_id: activeChild.id,
+          child_id: activeChild!.id,
           topic_id: topic?.id,
           topic_title: topic?.title,
           session_id: sessionId,
           message_count: messages.length,
           mastery_score: masteryScore,
-          child_name: activeChild.name,
+          child_name: activeChild!.name,
         }),
       });
 
@@ -505,24 +558,18 @@ export default function LessonPage() {
         newXpTotal: data.child.xp_total,
         newStreak: data.child.streak_days,
       });
+      setPersistedTopicProgress({
+        status: data.session.topic_status,
+        mastery_score: data.session.mastery_score,
+      });
       setCompletionBurst(true);
       awardXp(data.session.xp_earned);
       setSessionState('summary');
-    } catch {
-      const fallbackXP = 10 + Math.floor(messages.length / 2) * 2 + 5;
-      setSessionSummary({
-        text: `Explored ${topic?.title} with Lumi`,
-        xp: fallbackXP,
-        mastery: clampMastery(masteryScore + 15),
-        status: masteryScore + 15 >= 70 ? 'completed' : 'in_progress',
-        newXpTotal: activeChild.xp_total + fallbackXP,
-        newStreak: activeChild.streak_days,
-      });
-      setCompletionBurst(true);
-      awardXp(fallbackXP);
-      setSessionState('summary');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save lesson completion.');
+      setSessionState('loading');
     }
-  }, [sessionState, sessionId, messages.length, masteryScore, topic]);
+  }, [activeChild, sessionState, sessionId, messages.length, masteryScore, topic]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -536,12 +583,24 @@ export default function LessonPage() {
     return () => clearInterval(interval);
   }, [sessionStartTime, sessionState, handleEndSession]);
 
-  if (!subject || !topic) {
+  if (isPageLoading) {
+    return (
+      <div className="min-h-screen bg-midnight text-white flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <p className="text-5xl mb-4">âœ¨</p>
+          <h1 className="text-3xl font-bold mb-3">Loading lesson</h1>
+          <p className="text-slate-light/70 mb-6">Pulling real learner, topic, and lesson data from Supabase.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageLoadError || !activeChild || !subject || !topic) {
     return (
       <div className="min-h-screen bg-midnight text-white flex items-center justify-center px-6">
         <div className="text-center max-w-md">
           <p className="text-5xl mb-4">🌌</p>
-          <h1 className="text-3xl font-bold mb-3">Lesson not found</h1>
+          <h1 className="text-3xl font-bold mb-3">Can&apos;t open this lesson</h1>
           <p className="text-slate-light/70 mb-6">We couldn’t find that subject or topic.</p>
           <Link href="/learn">
             <Button>Back to Learning Universe</Button>
@@ -708,6 +767,14 @@ export default function LessonPage() {
                   <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ repeat: Infinity, duration: 1.8 }} className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/5 text-4xl">
                     <Sparkles className="h-10 w-10" style={{ color: subjectColour }} />
                   </motion.div>
+                  {error && (
+                    <div className="mb-4 space-y-4">
+                      <p className="max-w-lg text-sm text-slate-light/70">{error}</p>
+                      <Button onClick={() => void bootstrapLesson()} variant="secondary">
+                        Retry lesson
+                      </Button>
+                    </div>
+                  )}
                   <p className="text-lg font-bold">Getting everything ready…</p>
                 </div>
               </div>

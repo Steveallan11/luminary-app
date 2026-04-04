@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Starfield from '@/components/ui/Starfield';
 import Button from '@/components/ui/Button';
@@ -14,6 +14,7 @@ type OnboardingStep = 'name' | 'details' | 'avatar' | 'pin' | 'complete';
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<OnboardingStep>('name');
   const [childName, setChildName] = useState('');
   const [age, setAge] = useState('');
@@ -23,6 +24,20 @@ export default function OnboardingPage() {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
+  const [parentEmail, setParentEmail] = useState('');
+  const [familyName, setFamilyName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  useEffect(() => {
+    const emailFromQuery = searchParams.get('parent_email')?.trim().toLowerCase() ?? '';
+    const familyFromQuery = searchParams.get('family_name')?.trim() ?? '';
+    const emailFromStorage = typeof window !== 'undefined' ? sessionStorage.getItem('luminary_parent_email') ?? '' : '';
+    const familyFromStorage = typeof window !== 'undefined' ? sessionStorage.getItem('luminary_family_name') ?? '' : '';
+
+    setParentEmail(emailFromQuery || emailFromStorage);
+    setFamilyName(familyFromQuery || familyFromStorage);
+  }, [searchParams]);
 
   const handlePinInput = (digit: string) => {
     if (pinStep === 'enter') {
@@ -382,41 +397,60 @@ export default function OnboardingPage() {
               <div className="space-y-3">
                 <Button
                   onClick={async () => {
-                    // Create child record (v1: minimal, service-role backed).
-                    // Parent email is still not real auth yet, so we use a placeholder until the auth lane is made real.
-                    const parent_email = 'demo-parent@luminary.app';
+                    if (!parentEmail) {
+                      setSubmitError('Parent email is missing. Start from family signup so we can attach this learner to the right family.');
+                      return;
+                    }
+
+                    setIsCreating(true);
+                    setSubmitError('');
                     const response = await fetch('/api/children/create', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        parent_email,
-                        family_name: 'Demo Family',
+                        parent_email: parentEmail,
+                        family_name: familyName || undefined,
                         child: {
                           name: childName,
                           age: Number(age),
                           year_group: yearGroup,
                           avatar,
+                          learning_mode: learningMode,
+                          pin,
                         },
                       }),
                     });
 
                     const data = await response.json().catch(() => null) as any;
                     if (!response.ok || !data?.child_id) {
-                      // Fall back to /learn (still works in mock mode), but we want the real lane soon.
-                      router.push('/learn');
+                      setSubmitError(data?.error || 'Could not create learner profile.');
+                      setIsCreating(false);
                       return;
                     }
 
                     localStorage.setItem('luminary_child_id', data.child_id);
                     sessionStorage.setItem('luminary_child_id', data.child_id);
+                    sessionStorage.setItem('luminary_parent_email', parentEmail);
+                    if (familyName) {
+                      sessionStorage.setItem('luminary_family_name', familyName);
+                    }
                     router.push('/learn');
                   }}
                   variant="primary"
                   size="lg"
                   className="w-full gap-2"
+                  disabled={isCreating}
                 >
-                  Start Learning <ArrowRight size={18} />
+                  {isCreating ? 'Creating learner...' : <>Start Learning <ArrowRight size={18} /></>}
                 </Button>
+                {submitError && (
+                  <p className="text-sm text-red-300">{submitError}</p>
+                )}
+                {!parentEmail && (
+                  <p className="text-sm text-amber-light">
+                    Family details are missing. Go back to <Link href="/auth/signup" className="font-semibold text-white underline">family signup</Link> first.
+                  </p>
+                )}
                 <Button
                   onClick={() => router.push('/parent')}
                   variant="ghost"

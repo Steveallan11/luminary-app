@@ -1,0 +1,106 @@
+Summary generation failed, using fallback: AuthenticationError: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CZXmDrgLgwceytLu2hj8r"}
+    at APIError.generate (webpack-internal:///(rsc)/./node_modules/@anthropic-ai/sdk/core/error.mjs:57:20)
+    at Anthropic.makeStatusError (webpack-internal:///(rsc)/./node_modules/@anthropic-ai/sdk/client.mjs:183:70)
+    at Anthropic.makeRequest (webpack-internal:///(rsc)/./node_modules/@anthropic-ai/sdk/client.mjs:337:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async POST$1 (webpack-internal:///(rsc)/./src/app/api/lumi/session-end/route.ts:54:41)
+    at async eval (webpack-internal:///(rsc)/./node_modules/@sentry/nextjs/build/cjs/common/wrapRouteHandlerWithSentry.js:36:30)
+    at async C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  status: 401,
+  headers: Headers {
+    date: 'Sun, 29 Mar 2026 17:26:23 GMT',
+    'content-type': 'application/json',
+    'transfer-encoding': 'chunked',
+    connection: 'keep-alive',
+    'x-should-retry': 'false',
+    'request-id': 'req_011CZXmDrgLgwceytLu2hj8r',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    server: 'cloudflare',
+    'x-envoy-upstream-service-time': '6',
+    'content-encoding': 'gzip',
+    vary: 'Accept-Encoding',
+    'server-timing': 'x-originResponse;dur=8',
+    'set-cookie': '_cfuvid=bwnWA8NIRRzm4h9V7McapzJsSY65gHLs5ornbPPwaTQ-1774805183.4919837-1.0.1.1-uRPaySuVfBXVVdx5ZZGjG74Q7LYjSrH3kQkp5MVUUHA; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.anthropic.com',
+    'x-robots-tag': 'none',
+    'cf-cache-status': 'DYNAMIC',
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+    'cf-ray': '9e40944cd95e0f0a-LHR'
+  },
+  requestID: 'req_011CZXmDrgLgwceytLu2hj8r',
+  error: {
+    type: 'error',
+    error: { type: 'authentication_error', message: 'invalid x-api-key' },
+    request_id: 'req_011CZXmDrgLgwceytLu2hj8r'
+  }
+}
+Summary generation failed, using fallback: AuthenticationError: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CZXmJ4y8mTfsE1rFjeZsC"}
+    at APIError.generate (webpack-internal:///(rsc)/./node_modules/@anthropic-ai/sdk/core/error.mjs:57:20)
+    at Anthropic.makeStatusError (webpack-internal:///(rsc)/./node_modules/@anthropic-ai/sdk/client.mjs:183:70)
+    at Anthropic.makeRequest (webpack-internal:///(rsc)/./node_modules/@anthropic-ai/sdk/client.mjs:337:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async POST$1 (webpack-internal:///(rsc)/./src/app/api/lumi/session-end/route.ts:54:41)
+    at async eval (webpack-internal:///(rsc)/./node_modules/@sentry/nextjs/build/cjs/common/wrapRouteHandlerWithSentry.js:36:30)
+    at async C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\leona\Documents\Luminary\luminary-app\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  status: 401,
+  headers: Headers {
+    date: 'Sun, 29 Mar 2026 17:27:20 GMT',
+    'content-type': 'application/json',
+    'transfer-encoding': 'chunked',
+    connection: 'keep-alive',
+    'x-should-retry': 'false',
+    'request-id': 'req_011CZXmJ4y8mTfsE1rFjeZsC',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    server: 'cloudflare',
+    'x-envoy-upstream-service-time': '12',
+    'content-encoding': 'gzip',
+    vary: 'Accept-Encoding',
+    'server-timing': 'x-originResponse;dur=13',
+    'set-cookie': '_cfuvid=1pJSpBbmJonNCPATgIWD5jxN7JfEWnl9EajaWmhLBAg-1774805240.60021-1.0.1.1-64oZztNCKXgwuFOO9MB1hbzLTmnt_9WNuTBb.WvheEU; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.anthropic.com',
+    'x-robots-tag': 'none',
+    'cf-cache-status': 'DYNAMIC',
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+    'cf-ray': '9e4095b1bf151ed8-LHR'
+  },
+  requestID: 'req_011CZXmJ4y8mTfsE1rFjeZsC',
+  error: {
+    type: 'error',
+    error: { type: 'authentication_error', message: 'invalid x-api-key' },
+    request_id: 'req_011CZXmJ4y8mTfsE1rFjeZsC'
+  }
+}
+Session end error: { status: 404, message: 'Lesson session not found' }
+^C

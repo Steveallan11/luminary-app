@@ -89,17 +89,28 @@ export async function generateLessonLogic(body: any, jobId: string) {
       .update({ progress: 80 })
       .eq('id', jobId);
 
+    const { data: latestStructure } = await supabase
+      .from('topic_lesson_structures')
+      .select('version')
+      .eq('topic_id', brief.topic_id)
+      .eq('age_group', brief.age_group)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersion = (latestStructure?.version ?? 0) + 1;
+
     const qualityScore = scoreLessonQuality(structure);
     console.log(`[generate-lesson-logic] Job ${jobId} Quality score: ${qualityScore}`);
 
-    // Use upsert to handle the case where a lesson already exists for this topic+age_group+version
     const { data, error } = await supabase
       .from('topic_lesson_structures')
-      .upsert({
+      .insert({
         topic_id: brief.topic_id,
         age_group: brief.age_group,
         key_stage: brief.key_stage,
-        status: 'generating',
+        status: 'live',
+        generation_model: 'claude-sonnet-4-6',
+        version: nextVersion,
         spark_json: structure.spark_json,
         explore_json: structure.explore_json,
         anchor_json: structure.anchor_json,
@@ -107,12 +118,13 @@ export async function generateLessonLogic(body: any, jobId: string) {
         create_json: structure.create_json,
         check_json: structure.check_json,
         celebrate_json: structure.celebrate_json,
+        personalisation_hooks: structure.personalisation_hooks ?? null,
+        quality_score: qualityScore,
         game_type: structure.game_type,
         game_content: structure.game_content,
         concept_card_json: structure.concept_card_json,
         realworld_json: structure.realworld_json,
-        quality_score: qualityScore,
-      }, { onConflict: 'topic_id,age_group,version' })
+      })
       .select()
       .single();
 
@@ -210,6 +222,14 @@ export async function generateLessonLogic(body: any, jobId: string) {
           console.log(`[generate-lesson-logic] Job ${jobId} Created ${assetsToCreate.length} linked assets`);
         }
       }
+
+      await supabase
+        .from('topics')
+        .update({
+          lesson_generation_status: 'live',
+          last_generated_at: new Date().toISOString(),
+        })
+        .eq('id', brief.topic_id);
     }
 
     await supabase

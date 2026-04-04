@@ -23,10 +23,17 @@ export default function SignupPage() {
     setError('');
 
     try {
-      // In production, this would call Supabase auth
-      // For now, redirect to onboarding
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('luminary_parent_email', email.trim().toLowerCase());
+        sessionStorage.setItem('luminary_family_name', familyName.trim());
+      }
+
       await new Promise(resolve => setTimeout(resolve, 800));
-      router.push('/auth/onboarding');
+      const params = new URLSearchParams({
+        parent_email: email.trim().toLowerCase(),
+        family_name: familyName.trim(),
+      });
+      router.push(`/auth/onboarding?${params.toString()}`);
     } catch (err) {
       setError('Something went wrong. Please try again.');
     } finally {

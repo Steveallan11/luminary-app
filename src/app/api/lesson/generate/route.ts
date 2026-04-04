@@ -1,45 +1,70 @@
-import { NextRequest } from 'next/server';
-import { generateLessonEnvelope } from '@/lib/lesson-engine';
-import { publishLessonGenerationReady } from '@/lib/lesson-realtime';
+import { NextRequest, NextResponse } from 'next/server';
+import { getErrorMessage, getErrorResponseStatus, getLiveLearnerContext } from '@/lib/live-lesson-data';
+import { getAgeGroup } from '@/lib/lesson-runtime';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const childId = body.child_id as string | undefined;
     const subjectSlug = body.subject_slug as string | undefined;
     const topicSlug = body.topic_slug as string | undefined;
     const sessionId = body.session_id as string | undefined;
 
-    if (!subjectSlug || !topicSlug) {
-      return Response.json(
-        { error: 'subject_slug and topic_slug are required' },
+    if (!childId || !subjectSlug || !topicSlug || !sessionId) {
+      return NextResponse.json(
+        { error: 'child_id, subject_slug, topic_slug and session_id are required' },
         { status: 400 }
       );
     }
 
-    const generated = generateLessonEnvelope(subjectSlug, topicSlug);
+    const context = await getLiveLearnerContext({
+      childId,
+      subjectSlug,
+      topicSlug,
+      sessionId,
+    });
 
-    if (!generated) {
-      return Response.json({ error: 'Topic not found' }, { status: 404 });
+    if (!context.structure) {
+      return NextResponse.json(
+        {
+          error: 'No live lesson structure is available for this learner/topic yet. Retry after the backend generation job completes.',
+        },
+        { status: 503 }
+      );
     }
 
-    const realtimePayload = sessionId
-      ? await publishLessonGenerationReady({
-          sessionId,
-          subjectSlug,
-          topicSlug,
-        })
-      : null;
-
-    return Response.json({
+    return NextResponse.json({
       status: 'live',
-      generated_at: realtimePayload?.generated_at ?? new Date().toISOString(),
-      lesson: generated,
-      realtime_event: 'lesson_structure_ready',
-      realtime_payload: realtimePayload,
-      source: realtimePayload?.source ?? 'mock',
+      generated_at: new Date().toISOString(),
+      lesson: {
+        structure: context.structure,
+        contentManifest: context.contentManifest,
+        openingPrompt:
+          context.structure.spark_json?.opening_question ??
+          `What do you already know about ${context.topic.title}?`,
+      },
+      realtime_event: null,
+      realtime_payload: {
+        session_id: sessionId,
+        topic_id: context.topic.id,
+        topic_slug: context.topic.slug,
+        subject_slug: context.subject.slug,
+        age_group: getAgeGroup(context.child.age),
+        state: 'live',
+        generated_at: new Date().toISOString(),
+        content_manifest: context.contentManifest,
+        opening_prompt:
+          context.structure.spark_json?.opening_question ??
+          `What do you already know about ${context.topic.title}?`,
+        structure_id: context.structure.id,
+        source: 'supabase',
+      },
+      source: 'supabase',
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to generate lesson';
-    return Response.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: getErrorMessage(error, 'Failed to generate lesson') },
+      { status: getErrorResponseStatus(error) }
+    );
   }
 }

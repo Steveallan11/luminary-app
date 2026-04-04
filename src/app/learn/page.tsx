@@ -6,23 +6,22 @@ import { Flame, Zap, Clock, Loader2 } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import SubjectCard from '@/components/child/SubjectCard';
 import FirstRunMissions, { markFirstRunMission, resumeFirstRunMissions } from '@/components/child/FirstRunMissions';
-import { MOCK_SUBJECTS, MOCK_CHILD, MOCK_SESSIONS, MOCK_TOPIC_PROGRESS } from '@/lib/mock-data';
 import { getGreeting, formatTimeAgo } from '@/lib/utils';
 import { AVATAR_EMOJI_MAP } from '@/types';
-import type { Subject } from '@/types';
+import type { Child, LessonSession, Subject } from '@/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SubjectData {
   subjects: Subject[];
   topics: Array<{ id: string; subject_id: string; slug: string }>;
   progress: Record<string, Record<string, { status: string; mastery_score: number }>>;
-  source: 'supabase' | 'mock';
+  source: 'supabase';
 }
 
 interface ChildData {
-  child: typeof MOCK_CHILD;
-  sessions: typeof MOCK_SESSIONS;
-  source: 'supabase' | 'mock';
+  child: Child;
+  sessions: LessonSession[];
+  source: 'supabase';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -117,7 +116,7 @@ export default function LearnPage() {
   const getSubjectProgress = (slug: string) => {
     const subjectProgress = progress[slug];
     if (!subjectProgress) return { completed: 0, total: 5 };
-    const completed = Object.values(subjectProgress).filter((s: any) => s.status === 'completed').length;
+    const completed = Object.values(subjectProgress).filter((s) => s.status === 'completed').length;
     return { completed, total: Object.keys(subjectProgress).length || 5 };
   };
 

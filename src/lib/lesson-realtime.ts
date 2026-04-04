@@ -1,9 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import { buildContentManifest, findTopicBySlug, generateLessonEnvelope, getAgeGroup, getLessonStructureForTopic } from '@/lib/lesson-engine';
-import { MOCK_CHILD } from '@/lib/mock-data';
-import { TopicLessonStructure } from '@/types';
+import { resolveTopic, resolveTopicById, resolveStructure, buildLiveContentManifest } from '@/lib/live-lesson-data';
+import { ContentManifest, TopicLessonStructure } from '@/types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function getAdminClient() {
@@ -24,10 +23,10 @@ export interface LessonGenerationReadyPayload {
   age_group: string;
   state: 'live';
   generated_at: string;
-  content_manifest: ReturnType<typeof buildContentManifest>;
+  content_manifest: ContentManifest;
   opening_prompt: string;
   structure_id: string;
-  source: 'supabase' | 'mock';
+  source: 'supabase';
 }
 
 export async function publishLessonGenerationReady(params: {
@@ -35,37 +34,44 @@ export async function publishLessonGenerationReady(params: {
   subjectSlug: string;
   topicSlug: string;
 }): Promise<LessonGenerationReadyPayload | null> {
-  const topic = findTopicBySlug(params.subjectSlug, params.topicSlug);
-  if (!topic) return null;
+  // First get the resolved topic using live data
+  const topicContext = await resolveTopic(params.subjectSlug, params.topicSlug);
+  if (!topicContext.topic) return null;
 
-  const generated = generateLessonEnvelope(params.subjectSlug, params.topicSlug);
-  if (!generated) return null;
+  // Get the lesson structure for this topic and a child age (we'll use a default age for generation)
+  // Since we don't have a specific child here, we'll use age 8 as default
+  const structure = await resolveStructure(topicContext.topic.id, 8);
+  if (!structure) return null;
+
+  // Build the content manifest using live data
+  const contentManifest = await buildLiveContentManifest(topicContext.topic.id);
 
   const payloadBase: LessonGenerationReadyPayload = {
     session_id: params.sessionId,
-    topic_id: topic.id,
-    topic_slug: params.topicSlug,
-    subject_slug: params.subjectSlug,
-    age_group: getAgeGroup(MOCK_CHILD.age),
+    topic_id: topicContext.topic.id,
+    topic_slug: topicContext.topic.slug,
+    subject_slug: topicContext.subject.slug,
+    age_group: structure.age_group,
     state: 'live',
     generated_at: new Date().toISOString(),
-    content_manifest: generated.contentManifest,
-    opening_prompt: generated.openingPrompt,
-    structure_id: generated.structure.id,
-    source: 'mock',
+    content_manifest: contentManifest,
+    opening_prompt: structure.spark_json?.opening_question ?? `What do you already know about ${topicContext.topic.title}?`,
+    structure_id: structure.id,
+    source: 'supabase',
   };
 
   const supabase = getAdminClient();
   if (!supabase) {
-    return payloadBase;
+    return null;
   }
 
-  const structure = await upsertGeneratedLessonStructure(supabase, topic.id, generated.structure);
+  // Upsert the generated lesson structure to the database
+  const upsertedStructure = await upsertGeneratedLessonStructure(supabase, topicContext.topic.id, structure);
 
   const payload: LessonGenerationReadyPayload = {
     ...payloadBase,
-    structure_id: structure?.id ?? generated.structure.id,
-    source: structure ? 'supabase' : 'mock',
+    structure_id: upsertedStructure?.id ?? structure.id,
+    source: 'supabase',
   };
 
   try {
@@ -82,7 +88,7 @@ export async function publishLessonGenerationReady(params: {
   }
 
   try {
-    await supabase.channel(`lesson-generation:${topic.id}:${payload.age_group}`).send({
+    await supabase.channel(`lesson-generation:${topicContext.topic.id}:${payload.age_group}`).send({
       type: 'broadcast',
       event: 'lesson_structure_ready',
       payload,

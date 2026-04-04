@@ -3,6 +3,22 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
 
 let cachedAdminClient: SupabaseClient<any, any, any> | null = null;
 
@@ -31,6 +47,20 @@ export async function POST(req: NextRequest) {
 
     if (!file || !lessonId) {
       return NextResponse.json({ error: 'file and lesson_id are required' }, { status: 400 });
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: 'File exceeds 50MB limit' },
+        { status: 400 }
+      );
+    }
+
+    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+      return NextResponse.json(
+        { error: `Unsupported file type: ${file.type || 'unknown'}` },
+        { status: 400 }
+      );
     }
 
     // Determine bucket and path
@@ -82,6 +112,16 @@ export async function POST(req: NextRequest) {
     const { data: urlData } = supabase.storage
       .from(bucket)
       .getPublicUrl(fileName);
+
+    console.info(
+      JSON.stringify({
+        event: 'knowledge_base_upload_completed',
+        lesson_id: lessonId,
+        content_type: contentType,
+        file_name: file.name,
+        file_size: file.size,
+      })
+    );
 
     return NextResponse.json({
       success: true,

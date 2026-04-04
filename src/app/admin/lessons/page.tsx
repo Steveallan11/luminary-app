@@ -48,6 +48,38 @@ interface LessonBrief {
   curriculumObjectives: string[];
 }
 
+interface LessonAssetSummary {
+  id: string;
+  title: string;
+  asset_type: string;
+  asset_subtype: string | null;
+  status: 'draft' | 'published' | 'archived' | string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+const ASSET_TYPE_LABELS: Record<string, string> = {
+  concept_card: 'Concept Card',
+  game_questions: 'Game',
+  realworld_card: 'Real-World Card',
+  worksheet: 'Worksheet',
+  video: 'Video',
+  check_questions: 'Check Questions',
+  diagram: 'Diagram',
+};
+
+const ASSET_STATUS_STYLES: Record<string, string> = {
+  published: 'border-emerald/70 bg-emerald/10 text-emerald',
+  draft: 'border-amber/70 bg-amber/10 text-amber',
+  archived: 'border-rose/70 bg-rose/10 text-rose',
+};
+
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return 'Pending review';
+  return new Date(value).toLocaleString();
+};
+
 export default function AdminLessonsPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -68,6 +100,11 @@ export default function AdminLessonsPage() {
   const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [generatingContent, setGeneratingContent] = useState(false);
+  const [lessonAssets, setLessonAssets] = useState<LessonAssetSummary[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetsError, setAssetsError] = useState<string | null>(null);
+  const [isPublishingAsset, setIsPublishingAsset] = useState(false);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
 
   // Job tracking state
   const [latestJob, setLatestJob] = useState<any | null>(null);
@@ -225,6 +262,80 @@ export default function AdminLessonsPage() {
       alert('Failed to generate content. Please try again.');
     } finally {
       setGeneratingContent(false);
+    }
+  };
+
+  const fetchLessonAssets = async (lessonId: string) => {
+    setAssetsLoading(true);
+    setAssetsError(null);
+    try {
+      const res = await fetch(`/api/admin/lesson-assets?lesson_id=${lessonId}`);
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload.error || 'Unable to load lesson assets');
+      }
+      setLessonAssets(payload.assets || []);
+    } catch (err: any) {
+      setAssetsError(err.message || 'Failed to load lesson assets');
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedLesson?.id) {
+      setLessonAssets([]);
+      setAssetsError(null);
+      setPublishMessage(null);
+      return;
+    }
+
+    void fetchLessonAssets(selectedLesson.id);
+  }, [selectedLesson?.id]);
+
+  const publishAsset = async (assetId: string) => {
+    if (!selectedLesson?.id) return;
+    setIsPublishingAsset(true);
+    setPublishMessage(null);
+    try {
+      const res = await fetch('/api/admin/publish-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_id: assetId, reviewed_by: 'admin' }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload.error || 'Publish failed');
+      }
+      setPublishMessage(`Published ${payload.updated || 0} asset(s).`);
+      await fetchLessonAssets(selectedLesson.id);
+    } catch (err: any) {
+      setPublishMessage(err.message || 'Publish action failed');
+    } finally {
+      setIsPublishingAsset(false);
+    }
+  };
+
+  const publishAllAssets = async () => {
+    if (!selectedLesson?.id) return;
+    setIsPublishingAsset(true);
+    setPublishMessage(null);
+    try {
+      const res = await fetch('/api/admin/publish-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_id: selectedLesson.id, reviewed_by: 'admin' }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload.error || 'Publish failed');
+      }
+      setPublishMessage(`Published ${payload.updated || 0} asset(s).`);
+      await fetchLessonAssets(selectedLesson.id);
+    } catch (err: any) {
+      setPublishMessage(err.message || 'Publish action failed');
+    } finally {
+      setIsPublishingAsset(false);
     }
   };
 
@@ -636,6 +747,79 @@ export default function AdminLessonsPage() {
                             Generate Supporting Content
                           </button>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-light/50 mb-1">Generated Assets</p>
+                          <h3 className="text-lg font-bold text-white">
+                            {lessonAssets.length} asset{lessonAssets.length === 1 ? '' : 's'}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={publishAllAssets}
+                          disabled={!lessonAssets.length || isPublishingAsset}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber/20 text-amber border border-amber/40 text-sm font-bold hover:bg-amber/30 disabled:opacity-40"
+                        >
+                          {isPublishingAsset ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} className="text-amber" />}
+                          Publish All
+                        </button>
+                      </div>
+                      {publishMessage && (
+                        <p className="text-sm text-emerald-200">{publishMessage}</p>
+                      )}
+                      {assetsLoading && (
+                        <div className="flex justify-center py-6">
+                          <Loader2 size={24} className="text-amber animate-spin" />
+                        </div>
+                      )}
+                      {assetsError && !assetsLoading && (
+                        <p className="text-sm text-rose-200">{assetsError}</p>
+                      )}
+                      {!assetsLoading && lessonAssets.length === 0 && !assetsError && (
+                        <p className="text-sm text-slate-light/60">No assets have been generated yet. Approve the layout to create concept cards, games, and other supporting media.</p>
+                      )}
+                      <div className="space-y-3">
+                        {lessonAssets.map((asset) => (
+                          <div
+                            key={asset.id}
+                            className="rounded-2xl border border-white/10 bg-navy/60 p-4 flex flex-col gap-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-base font-semibold text-white">{asset.title}</p>
+                                <p className="text-xs uppercase tracking-[0.2em] text-slate-light/40">
+                                  {ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type}
+                                  {asset.asset_subtype ? ` • ${asset.asset_subtype}` : ''}
+                                </p>
+                                <p className="mt-1 text-[10px] text-slate-light/60">
+                                  Created {formatDate(asset.created_at)} • Reviewed {formatDate(asset.reviewed_at)}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                                    ASSET_STATUS_STYLES[asset.status] ?? 'border-white/20 text-white/70'
+                                  }`}
+                                >
+                                  {asset.status}
+                                </span>
+                                <button
+                                  onClick={() => publishAsset(asset.id)}
+                                  disabled={asset.status === 'published' || isPublishingAsset}
+                                  className="text-[11px] font-bold uppercase tracking-[0.3em] text-white/70 hover:text-white disabled:opacity-50"
+                                >
+                                  Publish
+                                </button>
+                              </div>
+                            </div>
+                            {asset.reviewed_by && (
+                              <p className="text-[10px] text-slate-light/50">Reviewed by {asset.reviewed_by}</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
 

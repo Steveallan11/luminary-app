@@ -1,0 +1,51 @@
+
+> luminary@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+  - Experiments (use with caution):
+    · instrumentationHook
+
+ ✓ Starting...
+ ✓ Ready in 4.2s
+ ○ Compiling /api/children/create ...
+ ✓ Compiled /api/children/create in 9.7s (898 modules)
+ POST /api/children/create 500 in 12998ms
+ ✓ Compiled in 531ms (898 modules)
+ ✓ Compiled in 591ms (898 modules)
+ POST /api/children/create 500 in 2581ms
+ ✓ Compiled in 435ms (898 modules)
+ POST /api/children/create 200 in 1618ms
+ ○ Compiling /api/lesson/start ...
+ ✓ Compiled /api/lesson/start in 804ms (923 modules)
+ POST /api/lesson/start 500 in 1593ms
+ ✓ Compiled in 399ms (923 modules)
+ POST /api/lesson/start 200 in 2548ms
+ ○ Compiling /api/lesson/generate ...
+ ✓ Compiled /api/lesson/generate in 583ms (925 modules)
+ POST /api/lesson/generate 503 in 2066ms
+ ○ Compiling /api/lumi/opening-message ...
+ ✓ Compiled /api/lumi/opening-message in 1291ms (1095 modules)
+ GET /api/lumi/opening-message?child_id=14d85f9f-9549-47f6-b6bf-6f81fd91897f&subject_slug=maths&topic_slug=maths-general&session_id=baf94ec0-0a89-4d9e-9281-7f794af3397f 200 in 2788ms
+ ✓ Compiled /api/lumi/chat in 314ms (1097 modules)
+ POST /api/lumi/chat 500 in 617ms
+ ✓ Compiled in 568ms (1093 modules)
+ POST /api/lesson/start 200 in 3255ms
+ POST /api/lesson/generate 503 in 1161ms
+ GET /api/lumi/opening-message?child_id=14d85f9f-9549-47f6-b6bf-6f81fd91897f&subject_slug=maths&topic_slug=maths-general&session_id=224259fc-d5f4-4e96-95b4-16858d7f6347 200 in 1612ms
+ POST /api/lumi/chat 200 in 899ms
+ ✓ Compiled /api/lumi/session-end in 403ms (1096 modules)
+ POST /api/lumi/session-end 500 in 1602ms
+ ✓ Compiled in 401ms (1096 modules)
+ POST /api/lesson/start 200 in 1986ms
+ POST /api/lesson/generate 503 in 1153ms
+ GET /api/lumi/opening-message?child_id=14d85f9f-9549-47f6-b6bf-6f81fd91897f&subject_slug=maths&topic_slug=maths-general&session_id=09ba0821-ec69-4891-9fff-b821e84b8469 200 in 1237ms
+ POST /api/lumi/chat 200 in 1053ms
+ POST /api/lumi/session-end 200 in 1602ms
+ ○ Compiling /api/learn/topic-progress ...
+ ✓ Compiled /api/learn/topic-progress in 580ms (1098 modules)
+ GET /api/learn/topic-progress?child_id=14d85f9f-9549-47f6-b6bf-6f81fd91897f&subject_slug=maths 200 in 1062ms
+ POST /api/lesson/start 404 in 123ms
+ POST /api/lumi/session-end 404 in 740ms

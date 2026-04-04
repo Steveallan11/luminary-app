@@ -5,9 +5,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-required-env.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:env": "node scripts/check-required-env.mjs",
+    "verify:learner-flow": "node scripts/verify-live-learner-flow.mjs"
   },
   "packageManager": "pnpm@10.32.1",
   "dependencies": {
@@ -16,6 +19,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@react-pdf/renderer": "^4.3.2",
+    "@sentry/nextjs": "^10.46.0",
     "@stripe/stripe-js": "^8.9.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.100.0",
