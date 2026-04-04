@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
 import { createClient } from '@supabase/supabase-js';
@@ -49,9 +49,13 @@ interface LessonBrief {
 }
 
 export default function AdminLessonsPage() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () =>
+      createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
   );
   const [activeView, setActiveView] = useState<'generate' | 'queue' | 'review'>('generate');
 
@@ -94,7 +98,18 @@ export default function AdminLessonsPage() {
       }
     };
     fetchSubjects();
-  }, []);
+  }, [supabase]);
+
+  const refreshLessons = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('topic_lesson_structures')
+      .select('*, topics(title, subjects(name))')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setLessons(data);
+    }
+  }, [supabase]);
 
   // Poll for latest job status
   useEffect(() => {
@@ -112,14 +127,14 @@ export default function AdminLessonsPage() {
           if (data.status === 'completed' || data.status === 'failed') {
             setIsPolling(false);
             if (data.status === 'completed') {
-              fetchLessons();
+        refreshLessons();
             }
           }
         }
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [isPolling, latestJob?.id]);
+  }, [isPolling, latestJob?.id, refreshLessons, supabase]);
 
   const selectedSubject = useMemo(
     () => subjects.find((s) => s.id === selectedSubjectId),
@@ -164,17 +179,6 @@ export default function AdminLessonsPage() {
     setBriefEdited(true);
   };
 
-  const fetchLessons = async () => {
-    const { data, error } = await supabase
-      .from('topic_lesson_structures')
-      .select('*, topics(title, subjects(name))')
-      .order('created_at', { ascending: false });
-    
-    if (!error && data) {
-      setLessons(data);
-    }
-  };
-
   const handleApprove = async (lessonId: string) => {
     setIsApproving(true);
     try {
@@ -186,7 +190,7 @@ export default function AdminLessonsPage() {
       
       if (res.ok) {
         alert('Lesson approved! You can now generate supporting content.');
-        fetchLessons();
+        refreshLessons();
         if (selectedLesson?.id === lessonId) {
           setSelectedLesson({ ...selectedLesson, status: 'live' });
         }
@@ -336,7 +340,7 @@ export default function AdminLessonsPage() {
           setIsPolling(true);
         }
         setActiveView('review');
-        fetchLessons();
+        refreshLessons();
       } else {
         const err = await res.json();
         setGenerationError(err.error || 'Failed to generate lesson');
@@ -368,7 +372,7 @@ export default function AdminLessonsPage() {
             <button
               onClick={() => {
                 setActiveView('review');
-                fetchLessons();
+                refreshLessons();
               }}
               className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                 activeView === 'review' ? 'bg-amber text-navy' : 'text-white hover:bg-white/5'

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getServerSupabaseUrl } from '@/lib/server-env';
 import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric, LessonStructureRecord } from '@/types/agents';
 
 export async function insertTopicAsset(asset: {
@@ -47,15 +48,12 @@ export function getServiceSupabaseClient() {
   return getServiceSupabase();
 }
 
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !key) {
-    return null;
-  }
-
-  return createClient(url, key);
+  const url = getServerSupabaseUrl();
+  if (!url || !serviceKey) return null;
+  return createClient(url, serviceKey);
 }
 
 export async function getLatestBusinessMetric(): Promise<BusinessMetric | null> {
