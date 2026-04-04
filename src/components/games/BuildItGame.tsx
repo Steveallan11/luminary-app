@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GripVertical, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { GameProps, BuildItData, GameAnswer } from '@/types';
@@ -9,13 +9,17 @@ import GameResults from './GameResults';
 
 export default function BuildItGame({ asset, childAge, subjectColour, onComplete }: GameProps) {
   const data = asset.content_json as unknown as BuildItData;
-  const [items, setItems] = useState(() =>
-    [...data.items].sort(() => Math.random() - 0.5)
-  );
+  const [items, setItems] = useState(data.items);
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState<Record<string, boolean>>({});
   const [finished, setFinished] = useState(false);
+  const [finalTimeTaken, setFinalTimeTaken] = useState<number | null>(null);
   const startTime = useRef(Date.now());
+
+  useEffect(() => {
+    startTime.current = Date.now();
+    setItems([...data.items].sort(() => Math.random() - 0.5));
+  }, [data.items]);
 
   const moveItem = (index: number, direction: 'up' | 'down') => {
     if (submitted) return;
@@ -34,17 +38,20 @@ export default function BuildItGame({ asset, childAge, subjectColour, onComplete
     setResults(res);
     setSubmitted(true);
 
-    setTimeout(() => {
-      // Show correct order
-      setItems([...data.items].sort((a, b) => a.correct_position - b.correct_position));
-      setTimeout(() => setFinished(true), 1500);
-    }, 2000);
+      setTimeout(() => {
+        // Show correct order
+        setItems([...data.items].sort((a, b) => a.correct_position - b.correct_position));
+        setTimeout(() => {
+          setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
+          setFinished(true);
+        }, 1500);
+      }, 2000);
   };
 
   if (finished) {
     const correct = Object.values(results).filter(Boolean).length;
     const score = Math.round((correct / data.items.length) * 100);
-    const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+    const timeTaken = finalTimeTaken ?? 0;
     const xpEarned = Math.round(score / 10) + 5;
     const answersJson: GameAnswer[] = items.map((item, i) => ({
       question_id: item.id,

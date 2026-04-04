@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -573,9 +573,12 @@ export default function AdminTestLessonPage() {
   const params = useParams();
   const router = useRouter();
   const lessonId = params.id as string;
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () => createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
+    []
   );
 
   const [lesson, setLesson] = useState<any>(null);
@@ -633,7 +636,7 @@ export default function AdminTestLessonPage() {
       setTotalQuestions(qCount);
     };
     fetchLesson();
-  }, [lessonId]);
+  }, [lessonId, supabase]);
 
   // ─── Load KB and media ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -683,7 +686,7 @@ export default function AdminTestLessonPage() {
   useEffect(() => {
     const timer = setTimeout(() => saveSession('upsert'), 3000);
     return () => clearTimeout(timer);
-  }, [messages, adminNotes, refinementHistory]);
+  }, [saveSession]);
 
   useEffect(() => {
     const handleUnload = () => saveSession('end');
@@ -742,7 +745,7 @@ export default function AdminTestLessonPage() {
     } catch (err: any) {
       setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: `Oops! I had a little hiccup there. Error: ${err.message}` } : m));
     } finally { setIsStreaming(false); }
-  }, [inputValue, isStreaming, lesson, messages, currentPhase, sessionId, knowledgeBase, currentPhaseMedia, topicTitle, subjectName]);
+  }, [inputValue, isStreaming, lesson, messages, currentPhase, sessionId, knowledgeBase, currentPhaseMedia, topicTitle, subjectName, linkedContent]);
 
   // ─── Refinement ─────────────────────────────────────────────────────────────
   const handleRefinement = async () => {

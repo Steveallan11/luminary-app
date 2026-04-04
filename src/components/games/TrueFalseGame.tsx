@@ -17,14 +17,21 @@ export default function TrueFalseGame({ asset, childAge, subjectColour, onComple
   const [timeLeft, setTimeLeft] = useState(60);
   const startTime = useRef(Date.now());
   const questionStartTime = useRef(Date.now());
+  const [finalTimeTaken, setFinalTimeTaken] = useState<number | null>(null);
+
+  useEffect(() => {
+    startTime.current = Date.now();
+    questionStartTime.current = Date.now();
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) {
-          setFinished(true);
-          return 0;
-        }
+      if (prev <= 1) {
+        setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
+        setFinished(true);
+        return 0;
+      }
         return prev - 1;
       });
     }, 1000);
@@ -51,22 +58,23 @@ export default function TrueFalseGame({ asset, childAge, subjectColour, onComple
 
     setFeedback({ correct: isCorrect, explanation: statement.explanation });
 
-    setTimeout(() => {
-      setFeedback(null);
-      if (currentIdx + 1 >= data.statements.length) {
-        setFinished(true);
-      } else {
-        setCurrentIdx(prev => prev + 1);
-        questionStartTime.current = Date.now();
-      }
-    }, isCorrect ? 600 : 2000);
+      setTimeout(() => {
+        setFeedback(null);
+        if (currentIdx + 1 >= data.statements.length) {
+          setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
+          setFinished(true);
+        } else {
+          setCurrentIdx(prev => prev + 1);
+          questionStartTime.current = Date.now();
+        }
+      }, isCorrect ? 600 : 2000);
   };
 
   if (finished) {
     const correct = answers.filter(a => a.is_correct).length;
     const total = Math.max(answers.length, 1);
     const score = Math.round((correct / data.statements.length) * 100);
-    const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+    const timeTaken = finalTimeTaken ?? 0;
     const xpEarned = Math.round(score / 10) + bonusPoints + 5;
     const wrongOnes = data.statements
       .filter(s => {

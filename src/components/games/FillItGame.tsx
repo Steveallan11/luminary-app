@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Lightbulb } from 'lucide-react';
 import { GameProps, FillItData, GameAnswer } from '@/types';
@@ -17,7 +17,12 @@ export default function FillItGame({ asset, childAge, subjectColour, onComplete 
   const [hintsUsed, setHintsUsed] = useState(0);
   const [showHint, setShowHint] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
+  const [finalTimeTaken, setFinalTimeTaken] = useState<number | null>(null);
   const startTime = useRef(Date.now());
+
+  useEffect(() => {
+    startTime.current = Date.now();
+  }, [data.questions]);
 
   const question = data.questions[currentQ];
 
@@ -37,16 +42,18 @@ export default function FillItGame({ asset, childAge, subjectColour, onComplete 
     setBlankResults(results);
     setSubmitted(true);
 
+    const elapsed = Math.round((Date.now() - startTime.current) / 1000);
     setAnswers(prev => [...prev, {
       question_id: question.id,
       child_answer: JSON.stringify(blankValues),
       correct_answer: JSON.stringify(question.blanks.map(b => b.answer)),
       is_correct: allCorrect,
-      time_taken: Math.round((Date.now() - startTime.current) / 1000),
+      time_taken: elapsed,
     }]);
 
     setTimeout(() => {
       if (currentQ + 1 >= data.questions.length) {
+        setFinalTimeTaken(elapsed);
         setFinished(true);
       } else {
         setCurrentQ(prev => prev + 1);
@@ -61,7 +68,7 @@ export default function FillItGame({ asset, childAge, subjectColour, onComplete 
   if (finished) {
     const correct = answers.filter(a => a.is_correct).length;
     const score = Math.round((correct / data.questions.length) * 100);
-    const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+    const timeTaken = finalTimeTaken ?? 0;
     const xpEarned = Math.max(5, Math.round(score / 10) + 5 - hintsUsed * 3);
     const wrongOnes = data.questions
       .filter((_, i) => answers[i] && !answers[i].is_correct)

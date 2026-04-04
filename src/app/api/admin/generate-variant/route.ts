@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import { getServerSupabaseUrl } from '@/lib/server-env';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -83,10 +84,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = createClient(getServerSupabaseUrl(), process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 

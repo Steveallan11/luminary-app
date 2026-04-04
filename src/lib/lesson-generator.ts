@@ -44,6 +44,7 @@ export interface GeneratedLessonStructure {
   celebrate_json: GeneratedPhaseJson;
   game_type: string;
   game_content: GeneratedGameContent;
+  personalisation_hooks?: Record<string, unknown> | null;
   concept_card_json: {
     title: string;
     icon: string;

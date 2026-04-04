@@ -6,6 +6,7 @@ import {
   ParsedContentSignal,
   ParsedPhaseSignal,
   Topic,
+  TopicAsset,
   TopicLessonStructure,
   TopicStatus,
 } from '@/types';
@@ -17,6 +18,11 @@ import {
   MOCK_TOPIC_PROGRESS,
 } from '@/lib/mock-data';
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
+import { getSupabaseServiceClient } from '@/lib/supabase-service';
+
+function logLessonFallback(message: string, error?: unknown) {
+  console.warn(`[lesson-engine] ${message}`, error instanceof Error ? error.message : error ?? '');
+}
 
 export interface LessonStartResult {
   state: 'live' | 'generating';
@@ -44,6 +50,72 @@ export function getAgeGroup(age: number): Exclude<AgeGroup, 'all'> {
   return '15-16';
 }
 
+type SupabaseServiceClient = ReturnType<typeof getSupabaseServiceClient>;
+
+async function fetchChildProfile(
+  supabase: SupabaseServiceClient,
+  childId: string
+): Promise<{ name?: string; age?: number }> {
+  const { data } = await supabase
+    .from('children')
+    .select('name, age')
+    .eq('id', childId)
+    .maybeSingle();
+  return data ?? {};
+}
+
+async function fetchTopicFromSupabase(
+  supabase: SupabaseServiceClient,
+  subjectSlug: string,
+  topicSlug: string
+): Promise<Topic | null> {
+  const { data: subject } = await supabase
+    .from('subjects')
+    .select('id')
+    .eq('slug', subjectSlug)
+    .maybeSingle();
+  if (!subject?.id) return null;
+
+  const { data: topic } = await supabase
+    .from('topics')
+    .select('id, subject_id, title, slug, description, order_index, key_stage, estimated_minutes, created_at')
+    .eq('subject_id', subject.id)
+    .eq('slug', topicSlug)
+    .maybeSingle();
+
+  return topic ?? null;
+}
+
+async function fetchStructureFromSupabase(
+  supabase: SupabaseServiceClient,
+  topicId: string,
+  ageGroup: Exclude<AgeGroup, 'all'>
+): Promise<TopicLessonStructure | null> {
+  const { data } = await supabase
+    .from('topic_lesson_structures')
+    .select('*')
+    .eq('topic_id', topicId)
+    .eq('age_group', ageGroup)
+    .eq('status', 'live')
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
+async function fetchTopicAssetsFromSupabase(
+  supabase: SupabaseServiceClient,
+  topicId: string
+): Promise<TopicAsset[]> {
+  const { data, error } = await supabase
+    .from('topic_assets')
+    .select('*')
+    .eq('topic_id', topicId)
+    .eq('status', 'published');
+  if (error || !data) return [];
+  return data as TopicAsset[];
+}
+
 export function findTopicBySlug(subjectSlug: string, topicSlug: string): Topic | null {
   const topics = MOCK_TOPICS[subjectSlug] || [];
   return topics.find((topic) => topic.slug === topicSlug) ?? null;
@@ -57,17 +129,17 @@ export function getLessonStructureForTopic(topicId: string, childAge: number): T
   return entry ?? null;
 }
 
-export function buildContentManifest(topicId: string): ContentManifest {
-  const assets = MOCK_TOPIC_ASSETS.filter((asset) => asset.topic_id === topicId);
+export function buildContentManifest(topicId: string, assets?: TopicAsset[]): ContentManifest {
+  const availableAssets = assets ?? MOCK_TOPIC_ASSETS.filter((asset) => asset.topic_id === topicId);
   const diagrams = [MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE].filter((diagram) => diagram.topic_id === topicId);
 
-  const concept = assets.find((asset) => asset.asset_type === 'concept_card');
-  const video = assets.find((asset) => asset.asset_type === 'video');
-  const worksheet = assets.find((asset) => asset.asset_type === 'worksheet');
-  const checkQuestions = assets.find((asset) => asset.asset_type === 'check_questions');
-  const everyday = assets.find((asset) => asset.asset_type === 'realworld_card' && asset.asset_subtype === 'everyday');
-  const inspiring = assets.find((asset) => asset.asset_type === 'realworld_card' && asset.asset_subtype === 'inspiring');
-  const game = assets.find((asset) => asset.asset_type === 'game_questions');
+  const concept = availableAssets.find((asset) => asset.asset_type === 'concept_card');
+  const video = availableAssets.find((asset) => asset.asset_type === 'video');
+  const worksheet = availableAssets.find((asset) => asset.asset_type === 'worksheet');
+  const checkQuestions = availableAssets.find((asset) => asset.asset_type === 'check_questions');
+  const everyday = availableAssets.find((asset) => asset.asset_type === 'realworld_card' && asset.asset_subtype === 'everyday');
+  const inspiring = availableAssets.find((asset) => asset.asset_type === 'realworld_card' && asset.asset_subtype === 'inspiring');
+  const game = availableAssets.find((asset) => asset.asset_type === 'game_questions');
   const linkedDiagram = diagrams[0];
 
   return {
@@ -84,12 +156,56 @@ export function buildContentManifest(topicId: string): ContentManifest {
   };
 }
 
-export function startLesson(subjectSlug: string, topicSlug: string): LessonStartResult | null {
-  const topic = findTopicBySlug(subjectSlug, topicSlug);
+export async function startLesson(
+  subjectSlug: string,
+  topicSlug: string,
+  childId?: string
+): Promise<LessonStartResult | null> {
+  let topic = findTopicBySlug(subjectSlug, topicSlug);
+  let childAge = MOCK_CHILD.age;
+  let childName = MOCK_CHILD.name;
+  let ageGroup = getAgeGroup(childAge);
+  let structure: TopicLessonStructure | null = topic ? getLessonStructureForTopic(topic.id, childAge) : null;
+  let manifestAssets: TopicAsset[] | undefined;
+
+  try {
+    const supabase = getSupabaseServiceClient();
+
+    if (childId) {
+      const profile = await fetchChildProfile(supabase, childId);
+      if (typeof profile.age === 'number') {
+        childAge = profile.age;
+        ageGroup = getAgeGroup(childAge);
+      }
+      if (profile.name) {
+        childName = profile.name;
+      }
+    }
+
+    const remoteTopic = await fetchTopicFromSupabase(supabase, subjectSlug, topicSlug);
+    if (remoteTopic) {
+      topic = remoteTopic;
+      structure = null;
+    }
+
+    if (topic) {
+      const supaStructure = await fetchStructureFromSupabase(supabase, topic.id, ageGroup);
+      if (supaStructure) {
+        structure = supaStructure;
+      }
+      manifestAssets = await fetchTopicAssetsFromSupabase(supabase, topic.id);
+    }
+  } catch (error) {
+    logLessonFallback('Supabase lesson fetch failed, falling back to mock data', error);
+  }
+
   if (!topic) return null;
 
-  const structure = getLessonStructureForTopic(topic.id, MOCK_CHILD.age);
-  const ageGroup = getAgeGroup(MOCK_CHILD.age);
+  if (!structure) {
+    structure = getLessonStructureForTopic(topic.id, childAge);
+  }
+
+  const contentManifest = buildContentManifest(topic.id, manifestAssets);
   const sessionId = `lesson-${topic.id}-${Date.now()}`;
 
   if (!structure) {
@@ -100,10 +216,10 @@ export function startLesson(subjectSlug: string, topicSlug: string): LessonStart
       structure: null,
       sessionId,
       phase: 'spark',
-      openingPrompt: `I’m building a fresh ${topic.title} lesson for ${MOCK_CHILD.name} now.`,
+      openingPrompt: `I'm building a fresh ${topic.title} lesson for ${childName} now.`,
       estimatedSeconds: 12,
       progressMessage: 'Lumi is weaving together your personalised lesson arc, examples, and practice tasks.',
-      contentManifest: buildContentManifest(topic.id),
+      contentManifest,
     };
   }
 
@@ -115,9 +231,11 @@ export function startLesson(subjectSlug: string, topicSlug: string): LessonStart
     sessionId,
     phase: 'spark',
     openingPrompt: structure.spark_json?.opening_question ?? `What do you already know about ${topic.title}?`,
-    contentManifest: buildContentManifest(topic.id),
+    contentManifest,
   };
 }
+
+
 
 export function generateLessonEnvelope(subjectSlug: string, topicSlug: string): GeneratedLessonEnvelope | null {
   const topic = findTopicBySlug(subjectSlug, topicSlug);

@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
 
     // ── If still no topic found, fall back to mock startLesson ───────────────
     if (!topic) {
-      const startState = startLesson(subject_slug, topic_slug);
+      const startState = await startLesson(subject_slug, topic_slug);
       if (!startState) {
         return new Response(JSON.stringify({ error: 'Topic not found' }), {
           status: 404,

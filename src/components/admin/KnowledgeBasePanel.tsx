@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   BookOpen, Upload, FileText, Image, Video, Link2, Plus, Trash2,
   Eye, EyeOff, Loader2, CheckCircle, AlertCircle, X, ExternalLink,
@@ -57,11 +57,7 @@ export default function KnowledgeBasePanel({ lessonId, topicTitle }: KnowledgeBa
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchItems();
-  }, [lessonId]);
-
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/knowledge-base?lesson_id=${lessonId}`);
@@ -72,7 +68,11 @@ export default function KnowledgeBasePanel({ lessonId, topicTitle }: KnowledgeBa
     } finally {
       setLoading(false);
     }
-  };
+  }, [lessonId]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

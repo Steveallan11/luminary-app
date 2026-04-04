@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint --ext .js,.jsx,.ts,.tsx ."
   },
   "packageManager": "pnpm@10.32.1",
   "dependencies": {
@@ -44,7 +44,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
     "@types/jspdf": "^2.0.0",
-    "eslint": "^10.0.3",
+    "eslint": "^9.0.0",
     "eslint-config-next": "^16.1.6"
   }
 }

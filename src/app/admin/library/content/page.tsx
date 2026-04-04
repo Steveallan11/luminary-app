@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   Layers, Search, ArrowLeft, Loader2, Eye, Edit3, Trash2,
@@ -34,11 +34,7 @@ export default function ContentLibraryPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchAssets();
-  }, []);
-
-  const fetchAssets = async () => {
+  const fetchAssets = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('topic_assets')
@@ -46,7 +42,11 @@ export default function ContentLibraryPage() {
       .order('created_at', { ascending: false });
     if (!error && data) setAssets(data);
     setLoading(false);
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchAssets();
+  }, [fetchAssets]);
 
   const filtered = assets.filter(a => {
     const title = a.title?.toLowerCase() || a.topics?.title?.toLowerCase() || '';

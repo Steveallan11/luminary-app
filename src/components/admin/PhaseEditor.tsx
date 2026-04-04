@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Edit3, Save, X, Plus, Trash2, Image, Video, Smile, Sparkles, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { Edit3, Save, X, Plus, Trash2, Image as ImageIcon, Video, Smile, Sparkles, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import MediaPicker from './MediaPicker';
 
 interface PhaseQuestion {
@@ -228,7 +228,7 @@ export default function PhaseEditor({
           {phaseMedia.length > 0 && (
             <div>
               <h4 className="text-gray-300 text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Image className="w-3.5 h-3.5" />
+                <ImageIcon className="w-3.5 h-3.5" />
                 Attached Media ({phaseMedia.length})
               </h4>
               <div className="grid grid-cols-3 gap-2">
@@ -238,7 +238,7 @@ export default function PhaseEditor({
                       <img src={media.thumbnail} alt={media.title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        {media.media_type === 'image' && <Image className="w-6 h-6 text-gray-500" />}
+                        {media.media_type === 'image' && <ImageIcon className="w-6 h-6 text-gray-500" />}
                         {(media.media_type === 'video' || media.media_type === 'youtube') && <Video className="w-6 h-6 text-gray-500" />}
                         {media.media_type === 'gif' && <Smile className="w-6 h-6 text-gray-500" />}
                       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GameProps, SortItData, GameAnswer } from '@/types';
 import GameWrapper from './GameWrapper';
@@ -8,7 +8,7 @@ import GameResults from './GameResults';
 
 export default function SortItGame({ asset, childAge, subjectColour, onComplete }: GameProps) {
   const data = asset.content_json as unknown as SortItData;
-  const [pool, setPool] = useState(() => [...data.items].sort(() => Math.random() - 0.5));
+  const [pool, setPool] = useState(data.items);
   const [sorted, setSorted] = useState<Record<string, string[]>>(() => {
     const init: Record<string, string[]> = {};
     data.categories.forEach(c => { init[c.id] = []; });
@@ -20,6 +20,12 @@ export default function SortItGame({ asset, childAge, subjectColour, onComplete 
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const startTime = useRef(Date.now());
   const totalItems = data.items.length;
+  const [finalTimeTaken, setFinalTimeTaken] = useState<number | null>(null);
+
+  useEffect(() => {
+    startTime.current = Date.now();
+    setPool([...data.items].sort(() => Math.random() - 0.5));
+  }, [data.items]);
 
   const handleSort = (itemId: string, categoryId: string) => {
     const item = data.items.find(i => i.id === itemId);
@@ -44,7 +50,10 @@ export default function SortItGame({ asset, childAge, subjectColour, onComplete 
         setSelectedItem(null);
 
         if (pool.length <= 1) {
-          setTimeout(() => setFinished(true), 400);
+          setTimeout(() => {
+            setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
+            setFinished(true);
+          }, 400);
         }
       }, 400);
     } else {
@@ -58,7 +67,7 @@ export default function SortItGame({ asset, childAge, subjectColour, onComplete 
   if (finished) {
     const correct = new Set(answers.filter(a => a.is_correct).map(a => a.question_id)).size;
     const score = Math.round((correct / totalItems) * 100);
-    const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+    const timeTaken = finalTimeTaken ?? 0;
     const xpEarned = Math.round(score / 10) + 5;
     const wrongOnes = data.items
       .filter(item => {

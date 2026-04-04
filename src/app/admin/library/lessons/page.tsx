@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   BookOpen, Search, Filter, FlaskConical, Check, Loader2,
@@ -44,11 +44,7 @@ export default function LessonLibraryPage() {
   const [editedPhaseData, setEditedPhaseData] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    fetchLessons();
-  }, []);
-
-  const fetchLessons = async () => {
+  const fetchLessons = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('topic_lesson_structures')
@@ -56,7 +52,11 @@ export default function LessonLibraryPage() {
       .order('created_at', { ascending: false });
     if (!error && data) setLessons(data);
     setLoading(false);
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchLessons();
+  }, [fetchLessons]);
 
   const filtered = lessons.filter(l => {
     const title = l.topics?.title?.toLowerCase() || '';

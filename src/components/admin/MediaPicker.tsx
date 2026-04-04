@@ -276,7 +276,7 @@ export default function MediaPicker({
                     {media.thumbnail ? (
                       <img
                         src={media.thumbnail}
-                        alt={media.title}
+                        alt={media.title || 'Media suggestion preview'}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';

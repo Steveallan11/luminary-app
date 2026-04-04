@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { startLesson } from '@/lib/lesson-engine';
+import { getSupabaseServiceClient } from '@/lib/supabase-service';
 import { MOCK_CHILD } from '@/lib/mock-data';
 
 export async function POST(request: NextRequest) {
@@ -15,19 +16,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = startLesson(subjectSlug, topicSlug);
+    const childId = body.child_id as string | undefined;
+    const result = await startLesson(subjectSlug, topicSlug, childId);
 
     if (!result) {
       return Response.json({ error: 'Topic not found' }, { status: 404 });
     }
 
+    let child = MOCK_CHILD;
+    if (childId) {
+      try {
+        const supabase = getSupabaseServiceClient();
+        const { data: childData } = await supabase
+          .from('children')
+          .select('id, name, age, year_group, xp_total, streak_days')
+          .eq('id', childId)
+          .single();
+        if (childData) {
+          child = {
+            ...child,
+            ...childData,
+          };
+        }
+      } catch (error) {
+        console.warn('Unable to fetch child profile, falling back to mock child', error);
+      }
+    }
+
     return Response.json({
-      child: {
-        id: MOCK_CHILD.id,
-        name: MOCK_CHILD.name,
-        age: MOCK_CHILD.age,
-        year_group: MOCK_CHILD.year_group,
-      },
+      child,
       lesson: result,
       realtime: {
         channel: `lesson-generation:${result.topic.id}:${result.ageGroup}`,
