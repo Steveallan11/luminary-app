@@ -18,12 +18,19 @@ export default function QuickFireGame({ asset, childAge, subjectColour, onComple
   const [maxStreak, setMaxStreak] = useState(0);
   const startTime = useRef(Date.now());
   const questionStartTime = useRef(Date.now());
+  const [finalTimeTaken, setFinalTimeTaken] = useState<number | null>(null);
+
+  useEffect(() => {
+    startTime.current = Date.now();
+    questionStartTime.current = Date.now();
+  }, []);
 
   useEffect(() => {
     if (finished) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
+          setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
           setFinished(true);
           return 0;
         }
@@ -67,6 +74,7 @@ export default function QuickFireGame({ asset, childAge, subjectColour, onComple
       () => {
         setFeedback(null);
         if (currentIdx + 1 >= data.questions.length) {
+          setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
           setFinished(true);
         } else {
           setCurrentIdx((prev) => prev + 1);
@@ -80,7 +88,7 @@ export default function QuickFireGame({ asset, childAge, subjectColour, onComple
   if (finished) {
     const correct = answers.filter((a) => a.is_correct).length;
     const score = Math.round((correct / data.questions.length) * 100);
-    const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+    const timeTaken = finalTimeTaken ?? 0;
     const streakBonus = maxStreak >= 5 ? 10 : maxStreak >= 3 ? 5 : 0;
     const xpEarned = Math.round(score / 10) + streakBonus + 5;
     const wrongOnes = data.questions

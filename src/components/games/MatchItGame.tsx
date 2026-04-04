@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GameProps, MatchItData, GameAnswer } from '@/types';
 import GameWrapper from './GameWrapper';
@@ -14,11 +14,10 @@ export default function MatchItGame({ asset, childAge, subjectColour, onComplete
   const [wrongPair, setWrongPair] = useState<{ left: string; right: string } | null>(null);
   const [answers, setAnswers] = useState<GameAnswer[]>([]);
   const [finished, setFinished] = useState(false);
+  const [finalTimeTaken, setFinalTimeTaken] = useState<number | null>(null);
   const startTime = useRef(Date.now());
 
-  const shuffledRight = useRef(
-    [...data.pairs].sort(() => Math.random() - 0.5)
-  );
+  const [shuffledRight, setShuffledRight] = useState(() => data.pairs);
 
   const tryMatch = useCallback((leftId: string, rightId: string) => {
     const pair = data.pairs.find(p => p.id === leftId);
@@ -40,7 +39,10 @@ export default function MatchItGame({ asset, childAge, subjectColour, onComplete
       setSelectedRight(null);
 
       if (matched.size + 1 === data.pairs.length) {
-        setTimeout(() => setFinished(true), 600);
+        setTimeout(() => {
+          setFinalTimeTaken(Math.round((Date.now() - startTime.current) / 1000));
+          setFinished(true);
+        }, 600);
       }
     } else {
       setWrongPair({ left: leftId, right: rightId });
@@ -64,11 +66,16 @@ export default function MatchItGame({ asset, childAge, subjectColour, onComplete
     if (selectedLeft) tryMatch(selectedLeft, id);
   };
 
+  useEffect(() => {
+    startTime.current = Date.now();
+    setShuffledRight([...data.pairs].sort(() => Math.random() - 0.5));
+  }, [data.pairs]);
+
   if (finished) {
     const correct = answers.filter(a => a.is_correct).length;
     const uniqueCorrect = new Set(answers.filter(a => a.is_correct).map(a => a.question_id)).size;
     const score = Math.round((uniqueCorrect / data.pairs.length) * 100);
-    const timeTaken = Math.round((Date.now() - startTime.current) / 1000);
+    const timeTaken = finalTimeTaken ?? 0;
     const xpEarned = Math.round(score / 10) + 5;
     const wrongOnes = data.pairs
       .filter(p => !answers.some(a => a.question_id === p.id && a.is_correct))

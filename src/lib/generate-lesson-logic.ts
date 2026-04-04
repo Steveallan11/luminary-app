@@ -4,10 +4,11 @@ import {
   scoreLessonQuality,
   type TopicBrief,
 } from './lesson-generator';
+import { getServerSupabaseUrl } from './server-env';
 
 export async function generateLessonLogic(body: any, jobId: string) {
   console.log(`[generate-lesson-logic] Function entered for job ${jobId}`);
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = getServerSupabaseUrl();
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
@@ -19,7 +20,7 @@ export async function generateLessonLogic(body: any, jobId: string) {
   try {
     console.log(`[generate-lesson-logic] Job ${jobId} started`);
     console.log(
-      "NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL +
+      "Supabase URL set: " + supabaseUrl +
       ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY +
       ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY
     );
@@ -109,6 +110,7 @@ export async function generateLessonLogic(body: any, jobId: string) {
         celebrate_json: structure.celebrate_json,
         game_type: structure.game_type,
         game_content: structure.game_content,
+        personalisation_hooks: structure.personalisation_hooks ?? null,
         concept_card_json: structure.concept_card_json,
         realworld_json: structure.realworld_json,
         quality_score: qualityScore,

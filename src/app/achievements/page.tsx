@@ -1,12 +1,32 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Zap, Star } from 'lucide-react';
 import ChildLayout from '@/components/layout/ChildLayout';
 import { MOCK_ACHIEVEMENTS, MOCK_CHILD_ACHIEVEMENTS, MOCK_CHILD } from '@/lib/mock-data';
 import { getAchievementProgress } from '@/lib/achievements';
 import { getXPLevel, getXPProgress } from '@/types';
+
+type ConfettiParticle = {
+  left: string;
+  color: string;
+  rotate: number;
+  duration: number;
+  delay: number;
+};
+
+const CONFETTI_COLORS = ['#F59E0B', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6'];
+
+function createConfettiParticles(count = 50) {
+  return Array.from({ length: count }).map(() => ({
+    left: `${Math.random() * 100}%`,
+    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    rotate: Math.random() * 720 - 360,
+    duration: 2 + Math.random() * 2,
+    delay: Math.random() * 0.5,
+  }));
+}
 
 export default function AchievementsPage() {
   const child = MOCK_CHILD;
@@ -20,20 +40,19 @@ export default function AchievementsPage() {
     return sum + (a?.xp_reward || 0);
   }, 0);
 
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [recentId, setRecentId] = useState<string | null>(null);
+  const recentAchievement = useMemo(
+    () => earned.find((ca) => Date.now() - new Date(ca.earned_at).getTime() < 3600000),
+    [earned]
+  );
+  const recentAchievementId = recentAchievement?.achievement_id ?? null;
+  const [showConfetti, setShowConfetti] = useState(() => Boolean(recentAchievement));
+  const confettiParticles = useMemo(() => (showConfetti ? createConfettiParticles() : []), [showConfetti]);
 
   useEffect(() => {
-    const recent = earned.find((ca) => {
-      const diff = Date.now() - new Date(ca.earned_at).getTime();
-      return diff < 3600000;
-    });
-    if (recent) {
-      setRecentId(recent.achievement_id);
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 4000);
-    }
-  }, []);
+    if (!showConfetti) return;
+    const timeout = setTimeout(() => setShowConfetti(false), 4000);
+    return () => clearTimeout(timeout);
+  }, [showConfetti]);
 
   return (
     <ChildLayout>
@@ -47,25 +66,23 @@ export default function AchievementsPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {Array.from({ length: 50 }).map((_, i) => (
+              {confettiParticles.map((particle, i) => (
                 <motion.div
                   key={i}
                   className="absolute w-2 h-2 rounded-full"
                   style={{
-                    left: `${Math.random() * 100}%`,
-                    backgroundColor: ['#F59E0B', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6'][
-                      Math.floor(Math.random() * 5)
-                    ],
+                    left: particle.left,
+                    backgroundColor: particle.color,
                   }}
                   initial={{ top: '-5%', rotate: 0, opacity: 1 }}
                   animate={{
                     top: '105%',
-                    rotate: Math.random() * 720 - 360,
+                    rotate: particle.rotate,
                     opacity: [1, 1, 0],
                   }}
                   transition={{
-                    duration: 2 + Math.random() * 2,
-                    delay: Math.random() * 0.5,
+                    duration: particle.duration,
+                    delay: particle.delay,
                     ease: 'easeIn',
                   }}
                 />
@@ -157,7 +174,7 @@ export default function AchievementsPage() {
           {achievements.map((achievement, index) => {
             const isEarned = earnedIds.has(achievement.id);
             const earnedData = earned.find((ca) => ca.achievement_id === achievement.id);
-            const isRecent = recentId === achievement.id;
+            const isRecent = recentAchievementId === achievement.id;
             const progress = !isEarned
               ? getAchievementProgress(achievement, child.id)
               : '';

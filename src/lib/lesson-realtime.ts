@@ -2,8 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 import { buildContentManifest, findTopicBySlug, generateLessonEnvelope, getAgeGroup, getLessonStructureForTopic } from '@/lib/lesson-engine';
 import { MOCK_CHILD } from '@/lib/mock-data';
 import { TopicLessonStructure } from '@/types';
+import { getServerSupabaseUrl } from './server-env';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = getServerSupabaseUrl();
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function getAdminClient() {

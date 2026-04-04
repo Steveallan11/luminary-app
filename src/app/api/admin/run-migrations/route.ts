@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getServerSupabaseUrl } from '@/lib/server-env';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // Use service role key for admin operations — lazy to avoid module-init crash at build time
 function getAdminClient() {
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    getServerSupabaseUrl(),
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
@@ -17,10 +18,10 @@ function getAdminClient() {
 async function execSQL(sql: string): Promise<{ success: boolean; error?: string }> {
   try {
     // Try using Supabase's built-in sql execution via the REST API
-    const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/`;
+    const url = `${getServerSupabaseUrl()}/rest/v1/`;
     
     // Use the pg-meta endpoint that Supabase exposes for schema operations
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/pg/query`, {
+    const res = await fetch(`${getServerSupabaseUrl()}/pg/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

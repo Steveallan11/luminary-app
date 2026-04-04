@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { generateLessonLogic } from '@/lib/generate-lesson-logic';
+import { getServerSupabaseUrl } from '@/lib/server-env';
 
 // Extend Vercel function timeout to 300 seconds (5 minutes) — required for Claude API calls
 export const maxDuration = 300;
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = getServerSupabaseUrl();
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, job_id: jobId, topic_id: safeTopicId }),
       }).then(async (res) => {
-        const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!);
         if (res.ok) {
           const result = await res.json();
           await supabase.from('generation_jobs').update({
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
           console.error(`[queue-generation] Job ${jobId} content generation failed:`, err);
         }
       }).catch(async (err) => {
-        const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!);
         await supabase.from('generation_jobs').update({
           status: 'failed',
           error_message: err.message
@@ -179,7 +180,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'job_id is required' }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = getServerSupabaseUrl();
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabase = createClient(supabaseUrl!, supabaseKey!);
 

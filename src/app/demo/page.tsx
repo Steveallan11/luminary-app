@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gamepad2, Image, Lightbulb, Globe, FileText, Video, ChevronRight, Sparkles } from 'lucide-react';
+import { Gamepad2, Image as ImageIcon, Lightbulb, Globe, FileText, Video, ChevronRight, Sparkles } from 'lucide-react';
 import GameRenderer from '@/components/games/GameRenderer';
 import DiagramRenderer from '@/components/diagrams/DiagramRenderer';
 import ConceptCard from '@/components/content/ConceptCard';
@@ -21,7 +21,7 @@ import { GameResult } from '@/types';
 
 const DEMO_SECTIONS = [
   { id: 'games', label: 'Mini-Games', icon: <Gamepad2 size={18} />, colour: '#EF4444' },
-  { id: 'diagrams', label: 'Diagrams', icon: <Image size={18} />, colour: '#8B5CF6' },
+  { id: 'diagrams', label: 'Diagrams', icon: <ImageIcon size={18} />, colour: '#8B5CF6' },
   { id: 'cards', label: 'Content Cards', icon: <Lightbulb size={18} />, colour: '#F59E0B' },
   { id: 'worksheet', label: 'Worksheet', icon: <FileText size={18} />, colour: '#6366F1' },
 ] as const;

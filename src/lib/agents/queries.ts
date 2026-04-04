@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { AgentLog, AgentName, AgentTask, AgentTaskDraft, AgentTaskStatus, BusinessMetric, LessonStructureRecord } from '@/types/agents';
+import { getServerSupabaseUrl } from './server-env';
 
 export async function insertTopicAsset(asset: {
   topic_id: string;
@@ -48,7 +49,7 @@ export function getServiceSupabaseClient() {
 }
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getServerSupabaseUrl();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {

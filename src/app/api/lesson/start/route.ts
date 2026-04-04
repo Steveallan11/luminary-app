@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = startLesson(subjectSlug, topicSlug);
+    const childId = body.child_id as string | undefined;
+    const result = await startLesson(subjectSlug, topicSlug, childId);
 
     if (!result) {
       return Response.json({ error: 'Topic not found' }, { status: 404 });

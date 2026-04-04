@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
 import { createClient } from '@supabase/supabase-js';
@@ -49,9 +49,12 @@ interface LessonBrief {
 }
 
 export default function AdminLessonsPage() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () => createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
+    []
   );
   const [activeView, setActiveView] = useState<'generate' | 'queue' | 'review'>('generate');
 
@@ -96,6 +99,22 @@ export default function AdminLessonsPage() {
     fetchSubjects();
   }, []);
 
+  const selectedSubject = useMemo(
+    () => subjects.find((s) => s.id === selectedSubjectId),
+    [selectedSubjectId, subjects]
+  );
+
+  const fetchLessons = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('topic_lesson_structures')
+      .select('*, topics(title, subjects(name))')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setLessons(data);
+    }
+  }, [supabase]);
+
   // Poll for latest job status
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -119,12 +138,7 @@ export default function AdminLessonsPage() {
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [isPolling, latestJob?.id]);
-
-  const selectedSubject = useMemo(
-    () => subjects.find((s) => s.id === selectedSubjectId),
-    [selectedSubjectId, subjects]
-  );
+  }, [isPolling, latestJob?.id, supabase, fetchLessons]);
 
   // Auto-generate brief when topic and subject are ready
   const handleAutoBrief = async () => {

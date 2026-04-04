@@ -1,15 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { BookOpen, Layers, ArrowRight, Sparkles, Clock, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminLibraryPage() {
   const router = useRouter();
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () => createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
+    []
   );
 
   const [lessonCount, setLessonCount] = useState(0);
@@ -33,7 +36,7 @@ export default function AdminLibraryPage() {
       setLoading(false);
     };
     fetchCounts();
-  }, []);
+  }, [supabase]);
 
   return (
     <div className="min-h-screen bg-navy text-white p-8">

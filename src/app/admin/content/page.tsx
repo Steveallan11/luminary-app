@@ -8,7 +8,7 @@ import {
   Video,
   Gamepad2,
   FileText,
-  Image,
+  Image as ImageIcon,
   BookOpen,
   Loader2,
   Edit,
@@ -37,7 +37,7 @@ const ASSET_TYPES: { type: AssetType; label: string; icon: React.ReactNode; colo
   { type: 'concept_card', label: 'Concept Card', icon: <Lightbulb size={14} />, colour: '#F59E0B' },
   { type: 'video', label: 'Video', icon: <Video size={14} />, colour: '#3B82F6' },
   { type: 'realworld_card', label: 'Real-World Card', icon: <Globe size={14} />, colour: '#10B981' },
-  { type: 'diagram', label: 'Diagram', icon: <Image size={14} />, colour: '#8B5CF6' },
+  { type: 'diagram', label: 'Diagram', icon: <ImageIcon size={14} />, colour: '#8B5CF6' },
   { type: 'game_questions', label: 'Game', icon: <Gamepad2 size={14} />, colour: '#EC4899' },
   { type: 'worksheet', label: 'Worksheet', icon: <FileText size={14} />, colour: '#6366F1' },
 ];
@@ -91,7 +91,7 @@ function ConceptCardPreview({ asset, colour }: { asset: TopicAsset; colour: stri
         )}
         {imagePrompt && (
           <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-center">
-            <Image size={20} className="mx-auto mb-2 text-slate-light/30" />
+          <ImageIcon size={20} className="mx-auto mb-2 text-slate-light/30" aria-hidden="true" />
             <p className="text-xs text-slate-light/40 italic">{imagePrompt}</p>
           </div>
         )}
