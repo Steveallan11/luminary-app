@@ -18,6 +18,13 @@ This directory contains ordered migrations for Luminary's production database.
    - Required for CEO dashboard and agent orchestration
    - Status: **APPLIED**
 
+3. **`003_content_system.sql`** — Content system tables (NEW)
+   - lesson_knowledge_base: Reference materials for Lumi
+   - lesson_phase_media: Images/videos/GIFs per phase
+   - admin_test_sessions: Production Studio testing logs
+   - lesson_content_links: Links assets to lesson phases
+   - Status: **PENDING** — Run this migration to enable media/KB features
+
 ## Running Migrations
 
 To apply migrations to a fresh Supabase project:
