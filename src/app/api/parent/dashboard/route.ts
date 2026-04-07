@@ -81,22 +81,27 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch recent lesson sessions
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('lesson_sessions')
-      .select(`
-        id,
-        topic_id,
-        final_mastery_score,
-        session_duration_mins,
-        final_phase_reached,
-        created_at
-      `)
-      .eq('child_id', childId)
-      .order('created_at', { ascending: false })
-      .limit(10);
+    let sessions: any[] = [];
+    try {
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('lesson_sessions')
+        .select(`
+          id,
+          topic_id,
+          final_mastery_score,
+          session_duration_mins,
+          final_phase_reached,
+          created_at
+        `)
+        .eq('child_id', childId)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (sessionsError) {
-      sessions = [];
+      if (!sessionsError) {
+        sessions = sessionsData || [];
+      }
+    } catch (e) {
+      console.log('Error fetching sessions:', e);
     }
 
     // Build progress map
