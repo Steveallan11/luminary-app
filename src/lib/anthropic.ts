@@ -40,10 +40,29 @@ export function getOpenAIClient(): OpenAI {
   return openaiClient;
 }
 
-// Use Claude 3.5 Sonnet for lesson generation (fast & capable)
-// Configurable via LUMI_MODEL env var
-export const LUMI_MODEL = process.env.LUMI_MODEL || 'claude-3-5-sonnet-20241022';
-export const LUMI_FAST_MODEL = process.env.LUMI_FAST_MODEL || 'claude-3-5-sonnet-20241022';
+// Use Claude Sonnet for lesson generation (fast & capable)
+// Configurable via LUMI_MODEL and LUMI_FAST_MODEL env vars
+// For OpenRouter, use format: anthropic/claude-3-5-sonnet-20241022
+// For direct Anthropic API, use format: claude-3-5-sonnet-20241022
+function getModelName(envVar: string, defaultName: string): string {
+  if (process.env[envVar]) {
+    return process.env[envVar] as string;
+  }
+  // If using OpenRouter, prefix with anthropic/
+  if (process.env.ANTHROPIC_BASE_URL) {
+    return `anthropic/${defaultName}`;
+  }
+  return defaultName;
+}
+
+export const LUMI_MODEL = getModelName('LUMI_MODEL', 'claude-3-5-sonnet-20241022');
+export const LUMI_FAST_MODEL = getModelName('LUMI_FAST_MODEL', 'claude-3-5-sonnet-20241022');
 export const LUMI_MAX_TOKENS = 8192;
 export const LUMI_SUMMARY_MAX_TOKENS = 100;
+
+console.log('[anthropic] Configured models:', {
+  LUMI_MODEL,
+  LUMI_FAST_MODEL,
+  usingOpenRouter: !!process.env.ANTHROPIC_BASE_URL,
+});
 
