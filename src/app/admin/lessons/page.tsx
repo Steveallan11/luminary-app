@@ -140,9 +140,13 @@ export default function AdminLessonsPage() {
 
   // Auto-generate brief when topic and subject are ready
   const handleAutoBrief = async () => {
-    if (!customTopicName || !selectedSubjectId) return;
+    if (!customTopicName || !selectedSubjectId) {
+      setGenerationError('Please enter a topic name and select a subject');
+      return;
+    }
 
     setGenerating(true);
+    setGenerationError(null);
     try {
       const res = await fetch('/api/admin/auto-brief', {
         method: 'POST',
@@ -158,8 +162,15 @@ export default function AdminLessonsPage() {
         const data = await res.json();
         setBriefData(data.brief);
         setBriefEdited(false);
+      } else {
+        const data = await res.json();
+        const errorMsg = data.details || data.error || 'Failed to generate brief';
+        setGenerationError(`Auto-brief failed: ${errorMsg}`);
+        console.error('Auto-brief error:', data);
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      setGenerationError(`Auto-brief error: ${msg}`);
       console.error('Failed to auto-generate brief:', error);
     } finally {
       setGenerating(false);

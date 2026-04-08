@@ -19,6 +19,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'topic_title is required' }, { status: 400 });
     }
 
+    // Check if API key is configured
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY is not configured');
+      return NextResponse.json(
+        { error: 'API key not configured. Set ANTHROPIC_API_KEY environment variable.' },
+        { status: 503 }
+      );
+    }
+
+    console.log(`[auto-brief] Generating brief for: ${topic_title}, Model: ${LUMI_FAST_MODEL}`);
+
     const client = getAnthropicClient();
     const prompt = `You are a curriculum expert for Luminary, a UK homeschooling platform.
 Generate a lesson brief for the following topic:
@@ -49,15 +60,27 @@ Return ONLY the JSON object, no markdown formatting, no code fences.`;
     });
 
     const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    console.log(`[auto-brief] API response received: ${text.substring(0, 100)}...`);
+
     const cleaned = text
       .replace(/^```(?:json)?\s*/m, '')
       .replace(/\s*```\s*$/m, '')
       .trim();
 
     const brief = JSON.parse(cleaned);
+    console.log(`[auto-brief] Brief generated successfully`);
     return NextResponse.json({ brief });
-  } catch (error) {
-    console.error('Auto-brief generation error:', error);
-    return NextResponse.json({ error: 'Failed to generate brief' }, { status: 500 });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[auto-brief] Generation error:', errorMessage);
+
+    // Return detailed error for debugging
+    return NextResponse.json(
+      {
+        error: 'Failed to generate brief',
+        details: errorMessage,
+      },
+      { status: 500 }
+    );
   }
 }
