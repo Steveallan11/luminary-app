@@ -7,13 +7,25 @@ let openaiClient: OpenAI | null = null;
 export function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
+
     if (!apiKey) {
-      // If no Anthropic key, we'll return a proxy or throw
-      // For now, we'll throw to let the caller handle the fallback
       console.error('ANTHROPIC_API_KEY is not configured.');
       throw new Error('ANTHROPIC_API_KEY is not configured. Please ensure it is set in your environment variables.');
     }
-    anthropicClient = new Anthropic({ apiKey });
+
+    // Support for OpenRouter (baseURL format: https://openrouter.ai/api/v1)
+    // If using OpenRouter, set ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1
+    const baseURL = process.env.ANTHROPIC_BASE_URL;
+
+    const config: ConstructorParameters<typeof Anthropic>[0] = {
+      apiKey,
+    };
+
+    if (baseURL) {
+      config.baseURL = baseURL;
+    }
+
+    anthropicClient = new Anthropic(config);
   }
   return anthropicClient;
 }
@@ -30,7 +42,8 @@ export function getOpenAIClient(): OpenAI {
 
 // Use claude-opus-4-6 for lesson generation (most capable)
 // Falls back to claude-sonnet-4-6 for faster/cheaper operations
-export const LUMI_MODEL = 'claude-opus-4-6';
-export const LUMI_FAST_MODEL = 'claude-sonnet-4-6';
+export const LUMI_MODEL = process.env.LUMI_MODEL || 'claude-opus-4-6';
+export const LUMI_FAST_MODEL = process.env.LUMI_FAST_MODEL || 'claude-sonnet-4-6';
 export const LUMI_MAX_TOKENS = 8192;
 export const LUMI_SUMMARY_MAX_TOKENS = 100;
+
