@@ -40,10 +40,10 @@ export function getOpenAIClient(): OpenAI {
   return openaiClient;
 }
 
-// Use claude-opus-4-6 for lesson generation (most capable)
-// Falls back to claude-sonnet-4-6 for faster/cheaper operations
-export const LUMI_MODEL = process.env.LUMI_MODEL || 'claude-opus-4-6';
-export const LUMI_FAST_MODEL = process.env.LUMI_FAST_MODEL || 'claude-sonnet-4-6';
+// Use Claude 3.5 Sonnet for lesson generation (fast & capable)
+// Configurable via LUMI_MODEL env var
+export const LUMI_MODEL = process.env.LUMI_MODEL || 'claude-3-5-sonnet-20241022';
+export const LUMI_FAST_MODEL = process.env.LUMI_FAST_MODEL || 'claude-3-5-sonnet-20241022';
 export const LUMI_MAX_TOKENS = 8192;
 export const LUMI_SUMMARY_MAX_TOKENS = 100;
 
