@@ -9,7 +9,16 @@ import { getSupabaseServiceClient } from '@/lib/supabase-service';
  */
 export async function GET() {
   try {
-    const supabase = getSupabaseServiceClient();
+    let supabase;
+    try {
+      supabase = getSupabaseServiceClient();
+    } catch (err) {
+      console.error('[users-api] Supabase config error:', err);
+      return NextResponse.json(
+        { error: 'Database not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' },
+        { status: 503 }
+      );
+    }
 
     // Fetch all families with their children and child progress
     const { data: families, error: familiesError } = await supabase
@@ -42,7 +51,11 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (familiesError) {
-      return NextResponse.json({ error: familiesError.message }, { status: 500 });
+      console.error('[users-api] Families fetch error:', familiesError);
+      return NextResponse.json(
+        { error: `Failed to fetch families: ${familiesError.message}` },
+        { status: 500 }
+      );
     }
 
     // Fetch all topics for reference (to show topic names in progress)
@@ -93,6 +106,7 @@ export async function GET() {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unexpected error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[users-api] Error:', message);
+    return NextResponse.json({ error: `Server error: ${message}` }, { status: 500 });
   }
 }
