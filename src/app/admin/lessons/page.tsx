@@ -193,6 +193,49 @@ export default function AdminLessonsPage() {
     }
   };
 
+  // Test auto-brief with hardcoded data
+  const handleTestAutoBrief = async () => {
+    console.log('[handleTestAutoBrief] Testing with hardcoded data...');
+    setGenerating(true);
+    setGenerationError(null);
+    try {
+      const testPayload = {
+        topic_title: 'The Water Cycle',
+        subject_name: 'Science',
+        age_group: '8-11',
+      };
+      console.log('[handleTestAutoBrief] Sending test request:', testPayload);
+
+      const res = await fetch('/api/admin/auto-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload),
+      });
+
+      console.log('[handleTestAutoBrief] Response status:', res.status);
+      const data = await res.json();
+      console.log('[handleTestAutoBrief] Response:', data);
+
+      if (res.ok) {
+        console.log('[handleTestAutoBrief] SUCCESS! Brief:', data.brief);
+        setGenerationError(null);
+        alert('✅ Auto-brief test successful! Check console for details.');
+      } else {
+        const errorMsg = data.details || data.error || 'Failed to generate brief';
+        console.error('[handleTestAutoBrief] API error:', errorMsg);
+        setGenerationError(`Test failed: ${errorMsg}`);
+        alert(`❌ Test failed: ${errorMsg}`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[handleTestAutoBrief] Exception:', msg, error);
+      setGenerationError(`Test error: ${msg}`);
+      alert(`❌ Test error: ${msg}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleBriefChange = (field: keyof LessonBrief, value: string) => {
     setBriefData((prev) => ({
       ...prev,
@@ -462,14 +505,24 @@ export default function AdminLessonsPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleAutoBrief}
-                    disabled={generating || !customTopicName || !selectedSubjectId}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all disabled:opacity-50"
-                  >
-                    {generating ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
-                    Auto-Generate Brief
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAutoBrief}
+                      disabled={generating || !customTopicName || !selectedSubjectId}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all disabled:opacity-50"
+                    >
+                      {generating ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
+                      Auto-Generate Brief
+                    </button>
+                    <button
+                      onClick={handleTestAutoBrief}
+                      disabled={generating}
+                      className="px-4 py-3 rounded-xl bg-blue-500/20 text-blue-400 font-bold text-sm hover:bg-blue-500/30 transition-all disabled:opacity-50 border border-blue-500/30"
+                      title="Test auto-brief with hardcoded data"
+                    >
+                      {generating ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
