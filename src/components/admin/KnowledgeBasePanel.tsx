@@ -499,7 +499,7 @@ export default function KnowledgeBasePanel({ lessonId, topicTitle }: KnowledgeBa
         <div className="bg-amber/5 border border-amber/20 rounded-lg p-3">
           <p className="text-amber/80 text-xs font-medium mb-1">How Lumi uses this knowledge base:</p>
           <ul className="text-amber/60 text-xs space-y-0.5">
-            <li>• Active text items are injected into Lumi's context for deeper explanations</li>
+            <li>• Active text items are injected into Lumi&apos;s context for deeper explanations</li>
             <li>• Images can be shown to pupils during the lesson at the right moment</li>
             <li>• Videos can be referenced by Lumi with timestamps and key moments</li>
             <li>• Toggle items on/off to control what Lumi has access to per session</li>
