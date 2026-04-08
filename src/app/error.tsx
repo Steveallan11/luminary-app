@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { AlertCircle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
+import { useEffect } from 'react';
 
 export default function Error({
   error,
@@ -12,6 +13,13 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Log the error for debugging
+    console.error('[Error Boundary]', error);
+    console.error('[Error Message]', error.message);
+    console.error('[Error Stack]', error.stack);
+  }, [error]);
+
   return (
     <div className="min-h-screen bg-navy flex items-center justify-center px-4">
       <motion.div
@@ -31,6 +39,17 @@ export default function Error({
         <p className="text-slate-light/60 mb-8">
           Lumi had a little hiccup. Don&apos;t worry, your progress is safe!
         </p>
+
+        {/* Show error details in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-6 p-4 bg-red-500/10 rounded-lg border border-red-500/20 text-left">
+            <p className="text-xs text-red-300 font-mono break-words">{error.message}</p>
+            {error.digest && (
+              <p className="text-xs text-red-200/60 mt-2">Digest: {error.digest}</p>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-center gap-3">
           <Button variant="primary" onClick={reset} className="gap-2">
             <RefreshCw size={16} />

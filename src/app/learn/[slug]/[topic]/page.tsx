@@ -59,11 +59,20 @@ export default function LessonPage() {
 
   // Load live data on mount
   useEffect(() => {
+    console.log('[Lesson Init] Starting lesson initialization');
     const childId = getChildIdFromStorage();
+    console.log('[Lesson Init] Child ID:', childId);
+
     const qp = childId ? `?child_id=${childId}` : '';
+
+    // Fetch subjects and topics
     fetch(`/api/learn/subjects${qp}`)
-      .then((r) => r.json())
+      .then((r) => {
+        console.log('[Lesson Init] Subjects fetch status:', r.status);
+        return r.json();
+      })
       .then((data) => {
+        console.log('[Lesson Init] Subjects data:', data);
         if (data.subjects?.length) setLiveSubjects(data.subjects);
         if (data.topics?.length) {
           const subjectObj = data.subjects?.find((s: any) => s.slug === slug);
@@ -71,12 +80,24 @@ export default function LessonPage() {
           if (filtered.length) setLiveTopics(filtered);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('[Lesson Init] Subjects fetch error:', err);
+      });
+
+    // Fetch child profile if we have child ID
     if (childId) {
       fetch(`/api/learn/child-profile?child_id=${childId}`)
-        .then((r) => r.json())
-        .then((data) => { if (data.child) setActiveChild(data.child); })
-        .catch(() => {});
+        .then((r) => {
+          console.log('[Lesson Init] Child profile fetch status:', r.status);
+          return r.json();
+        })
+        .then((data) => {
+          console.log('[Lesson Init] Child profile data:', data);
+          if (data.child) setActiveChild(data.child);
+        })
+        .catch((err) => {
+          console.error('[Lesson Init] Child profile fetch error:', err);
+        });
     }
   }, [slug]);
 
