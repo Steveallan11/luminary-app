@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnthropicClient, LUMI_FAST_MODEL } from '@/lib/anthropic';
+import { LUMI_FAST_MODEL } from '@/lib/anthropic';
+import { getOpenAIClient } from '@/lib/anthropic';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -7,7 +8,7 @@ export const maxDuration = 60;
 /**
  * POST /api/admin/auto-brief
  *
- * Auto-generates a lesson brief from a topic title using Claude.
+ * Auto-generates a lesson brief from a topic title using Claude via OpenRouter.
  * Returns suggested key concepts, misconceptions, real-world examples, and curriculum objectives.
  */
 export async function POST(request: NextRequest) {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[auto-brief] Generating brief for: ${topic_title}, Model: ${LUMI_FAST_MODEL}`);
 
-    const client = getAnthropicClient();
+    const client = getOpenAIClient();
     const prompt = `You are a curriculum expert for Luminary, a UK homeschooling platform.
 Generate a lesson brief for the following topic:
 - Topic: ${topic_title}
@@ -48,7 +49,7 @@ Return ONLY valid JSON with this structure:
 Ensure the content is age-appropriate and follows the UK National Curriculum standards.
 Return ONLY the JSON object, no markdown formatting, no code fences.`;
 
-    const response = await client.messages.create({
+    const response = await client.chat.completions.create({
       model: LUMI_FAST_MODEL,
       max_tokens: 1000,
       messages: [
@@ -59,7 +60,7 @@ Return ONLY the JSON object, no markdown formatting, no code fences.`;
       ],
     });
 
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    const text = response.choices[0]?.message?.content || '';
     console.log(`[auto-brief] API response received: ${text.substring(0, 100)}...`);
 
     const cleaned = text

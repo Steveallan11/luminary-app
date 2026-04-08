@@ -32,9 +32,18 @@ export function getAnthropicClient(): Anthropic {
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
+    // Use OpenRouter via ANTHROPIC_API_KEY if configured, otherwise use OpenAI key
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+    const baseURL = process.env.ANTHROPIC_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+
+    if (!apiKey) {
+      console.error('Neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is configured.');
+      throw new Error('API key is not configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY.');
+    }
+
     openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+      apiKey,
+      baseURL,
     });
   }
   return openaiClient;
@@ -43,13 +52,13 @@ export function getOpenAIClient(): OpenAI {
 // Use Claude Sonnet for lesson generation (fast & capable)
 // Configurable via LUMI_MODEL and LUMI_FAST_MODEL env vars
 // For OpenRouter, use format: anthropic/claude-3-5-sonnet-20241022
-// For direct Anthropic API, use format: claude-3-5-sonnet-20241022
+// For direct Anthropic/OpenAI API, use format: claude-3-5-sonnet-20241022
 function getModelName(envVar: string, defaultName: string): string {
   if (process.env[envVar]) {
     return process.env[envVar] as string;
   }
-  // If using OpenRouter, prefix with anthropic/
-  if (process.env.ANTHROPIC_BASE_URL) {
+  // Always use OpenRouter format (anthropic/ prefix) since we're routing through OpenRouter
+  if (process.env.ANTHROPIC_BASE_URL === 'https://openrouter.ai/api/v1') {
     return `anthropic/${defaultName}`;
   }
   return defaultName;
@@ -64,5 +73,6 @@ console.log('[anthropic] Configured models:', {
   LUMI_MODEL,
   LUMI_FAST_MODEL,
   usingOpenRouter: !!process.env.ANTHROPIC_BASE_URL,
+  baseURL: process.env.ANTHROPIC_BASE_URL,
 });
 
