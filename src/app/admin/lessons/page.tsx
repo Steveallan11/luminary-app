@@ -140,38 +140,54 @@ export default function AdminLessonsPage() {
 
   // Auto-generate brief when topic and subject are ready
   const handleAutoBrief = async () => {
+    console.log('[handleAutoBrief] Starting...');
+    console.log('[handleAutoBrief] Topic:', customTopicName);
+    console.log('[handleAutoBrief] Subject:', selectedSubject?.name);
+    console.log('[handleAutoBrief] Age Group:', ageGroup);
+
     if (!customTopicName || !selectedSubjectId) {
-      setGenerationError('Please enter a topic name and select a subject');
+      const msg = 'Please enter a topic name and select a subject';
+      console.warn('[handleAutoBrief] Validation failed:', msg);
+      setGenerationError(msg);
       return;
     }
 
     setGenerating(true);
     setGenerationError(null);
     try {
+      const payload = {
+        topic_title: customTopicName,
+        subject_name: selectedSubject?.name || 'General',
+        age_group: ageGroup,
+      };
+      console.log('[handleAutoBrief] Sending request with payload:', payload);
+
       const res = await fetch('/api/admin/auto-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic_title: customTopicName,
-          subject_name: selectedSubject?.name || 'General',
-          age_group: ageGroup,
-        }),
+        body: JSON.stringify(payload),
       });
 
+      console.log('[handleAutoBrief] Response status:', res.status);
+      console.log('[handleAutoBrief] Response ok:', res.ok);
+
+      const data = await res.json();
+      console.log('[handleAutoBrief] Response data:', data);
+
       if (res.ok) {
-        const data = await res.json();
+        console.log('[handleAutoBrief] Success! Brief data:', data.brief);
         setBriefData(data.brief);
         setBriefEdited(false);
+        setGenerationError(null);
       } else {
-        const data = await res.json();
         const errorMsg = data.details || data.error || 'Failed to generate brief';
+        console.error('[handleAutoBrief] API error:', errorMsg);
         setGenerationError(`Auto-brief failed: ${errorMsg}`);
-        console.error('Auto-brief error:', data);
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[handleAutoBrief] Exception:', msg, error);
       setGenerationError(`Auto-brief error: ${msg}`);
-      console.error('Failed to auto-generate brief:', error);
     } finally {
       setGenerating(false);
     }
