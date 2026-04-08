@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
 import { createClient } from '@supabase/supabase-js';
@@ -82,6 +82,18 @@ export default function AdminLessonsPage() {
   });
   const [briefEdited, setBriefEdited] = useState(false);
 
+  // Fetch lessons from Supabase
+  const fetchLessons = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('topic_lesson_structures')
+      .select('*, topics(title, subjects(name))')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setLessons(data);
+    }
+  }, [supabase]);
+
   // Fetch subjects on mount
   useEffect(() => {
     const fetchSubjects = async () => {
@@ -106,7 +118,7 @@ export default function AdminLessonsPage() {
           .select('*')
           .eq('id', latestJob.id)
           .single();
-        
+
         if (!error && data) {
           setLatestJob(data);
           if (data.status === 'completed' || data.status === 'failed') {
@@ -119,7 +131,7 @@ export default function AdminLessonsPage() {
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [isPolling, latestJob?.id]);
+  }, [isPolling, latestJob?.id, fetchLessons]);
 
   const selectedSubject = useMemo(
     () => subjects.find((s) => s.id === selectedSubjectId),
@@ -162,17 +174,6 @@ export default function AdminLessonsPage() {
         : value.split('\n').map((s) => s.trim()).filter(Boolean),
     }));
     setBriefEdited(true);
-  };
-
-  const fetchLessons = async () => {
-    const { data, error } = await supabase
-      .from('topic_lesson_structures')
-      .select('*, topics(title, subjects(name))')
-      .order('created_at', { ascending: false });
-    
-    if (!error && data) {
-      setLessons(data);
-    }
   };
 
   const handleApprove = async (lessonId: string) => {
