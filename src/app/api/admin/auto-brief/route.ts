@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LUMI_FAST_MODEL } from '@/lib/anthropic';
-import { getOpenAIClient } from '@/lib/anthropic';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -21,17 +19,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if API key is configured
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('ANTHROPIC_API_KEY is not configured');
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      console.error('[auto-brief] ANTHROPIC_API_KEY is not configured');
       return NextResponse.json(
         { error: 'API key not configured. Set ANTHROPIC_API_KEY environment variable.' },
         { status: 503 }
       );
     }
 
-    console.log(`[auto-brief] Generating brief for: ${topic_title}, Model: ${LUMI_FAST_MODEL}`);
+    const model = 'anthropic/claude-3-5-sonnet-20241022';
+    console.log(`[auto-brief] Generating brief for: ${topic_title}, Model: ${model}`);
 
-    const client = getOpenAIClient();
     const prompt = `You are a curriculum expert for Luminary, a UK homeschooling platform.
 Generate a lesson brief for the following topic:
 - Topic: ${topic_title}
@@ -49,18 +48,40 @@ Return ONLY valid JSON with this structure:
 Ensure the content is age-appropriate and follows the UK National Curriculum standards.
 Return ONLY the JSON object, no markdown formatting, no code fences.`;
 
-    const response = await client.chat.completions.create({
-      model: LUMI_FAST_MODEL,
-      max_tokens: 1000,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+    // Call OpenRouter API directly using fetch
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      }),
     });
 
-    const text = response.choices[0]?.message?.content || '';
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(`[auto-brief] OpenRouter API error: ${response.status}`, errorData.substring(0, 200));
+      return NextResponse.json(
+        {
+          error: 'Failed to generate brief',
+          details: `OpenRouter API returned ${response.status}`,
+          errorType: 'OpenRouterError',
+        },
+        { status: 500 }
+      );
+    }
+
+    const data = await response.json();
+    const text = data.choices[0]?.message?.content || '';
     console.log(`[auto-brief] API response received: ${text.substring(0, 100)}...`);
 
     const cleaned = text
