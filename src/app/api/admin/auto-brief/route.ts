@@ -73,12 +73,14 @@ Return ONLY the JSON object, no markdown formatting, no code fences.`;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[auto-brief] Generation error:', errorMessage);
+    console.error('[auto-brief] Full error:', error);
 
     // Return detailed error for debugging
     return NextResponse.json(
       {
         error: 'Failed to generate brief',
         details: errorMessage,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
       },
       { status: 500 }
     );
