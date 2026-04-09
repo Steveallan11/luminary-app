@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getAnthropicClient } from '@/lib/anthropic';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-const LUMI_MODEL = 'anthropic/claude-opus-4-6';
+const LUMI_MODEL = 'anthropic/claude-opus-4-6'; // Will be properly configured via getAnthropicClient()
 
 type LearningStyle = 'visual' | 'auditory' | 'kinesthetic' | 'reading_writing';
 type LessonLength = 'full' | 'standard' | 'bite_size';
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const client = new OpenAI({ apiKey: process.env.OPENROUTER_API_KEY!, baseURL: 'https://openrouter.ai/api/v1' });
+    const client = getAnthropicClient();
 
     // Determine which phases to generate based on lesson length
     const phasesToGenerate = lesson_length === 'bite_size'
