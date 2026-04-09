@@ -19,11 +19,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if API key is configured
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      console.error('[auto-brief] ANTHROPIC_API_KEY is not configured');
+      console.error('[auto-brief] OPENROUTER_API_KEY is not configured');
       return NextResponse.json(
-        { error: 'API key not configured. Set ANTHROPIC_API_KEY environment variable.' },
+        { error: 'API key not configured. Set OPENROUTER_API_KEY environment variable.' },
         { status: 503 }
       );
     }
