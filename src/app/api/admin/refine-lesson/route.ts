@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-const LUMI_MODEL = 'claude-opus-4-6';
+const LUMI_MODEL = 'anthropic/claude-opus-4-6';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+    const client = new OpenAI({ apiKey: process.env.OPENROUTER_API_KEY!, baseURL: 'https://openrouter.ai/api/v1' });
 
     const topicTitle = current_lesson.topics?.title || 'Unknown Topic';
     const subjectName = current_lesson.topics?.subjects?.name || 'General';

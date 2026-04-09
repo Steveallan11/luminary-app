@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,7 @@ function getAdminClient() {
   );
 }
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+const openrouter = new OpenAI({ apiKey: process.env.OPENROUTER_API_KEY!, baseURL: 'https://openrouter.ai/api/v1' });
 
 // GET: Fetch all knowledge base items for a lesson
 export async function GET(req: NextRequest) {
@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
 
     if (text_content && text_content.length > 100) {
       try {
-        const summaryResponse = await anthropic.messages.create({
-          model: 'claude-opus-4-6',
+        const summaryResponse = await openrouter.messages.create({
+          model: 'anthropic/claude-opus-4-6',
           max_tokens: 500,
           messages: [{
             role: 'user',

@@ -21,7 +21,7 @@ export async function generateLessonLogic(body: any, jobId: string) {
     console.log(
       "NEXT_PUBLIC_SUPABASE_URL=" + process.env.NEXT_PUBLIC_SUPABASE_URL +
       ", SUPABASE_SERVICE_ROLE_KEY (present): " + !!process.env.SUPABASE_SERVICE_ROLE_KEY +
-      ", ANTHROPIC_API_KEY (present): " + !!process.env.ANTHROPIC_API_KEY
+      ", OPENROUTER_API_KEY (present): " + !!process.env.OPENROUTER_API_KEY
     );
 
     // Update progress: starting
