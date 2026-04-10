@@ -6,14 +6,30 @@ let openaiClient: OpenAI | null = null;
 
 export function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Support both OpenRouter and OpenCode via environment variables
+    const apiKey = process.env.OPENROUTER_API_KEY ||
+                   process.env.OPENCODE_API_KEY ||
+                   process.env.ANTHROPIC_API_KEY;
+
     if (!apiKey) {
-      // If no Anthropic key, we'll return a proxy or throw
-      // For now, we'll throw to let the caller handle the fallback
-      console.error('ANTHROPIC_API_KEY is not configured.');
-      throw new Error('ANTHROPIC_API_KEY is not configured. Please ensure it is set in your environment variables.');
+      console.error('No API key configured. Set OPENROUTER_API_KEY, OPENCODE_API_KEY, or ANTHROPIC_API_KEY.');
+      throw new Error('No API key configured. Set OPENROUTER_API_KEY, OPENCODE_API_KEY, or ANTHROPIC_API_KEY.');
     }
-    anthropicClient = new Anthropic({ apiKey });
+
+    // Determine which endpoint to use based on configured API key
+    let baseURL = 'https://api.anthropic.com/v1';
+    if (process.env.OPENROUTER_API_KEY) {
+      baseURL = 'https://openrouter.ai/api/v1';
+    } else if (process.env.OPENCODE_API_KEY) {
+      baseURL = process.env.OPENCODE_API_ENDPOINT || 'https://api.opencode.ai/v1';
+    }
+
+    const config: ConstructorParameters<typeof Anthropic>[0] = {
+      apiKey,
+      baseURL,
+    };
+
+    anthropicClient = new Anthropic(config);
   }
   return anthropicClient;
 }
@@ -29,8 +45,21 @@ export function getOpenAIClient(): OpenAI {
 }
 
 // Use claude-opus-4-6 for lesson generation (most capable)
+// When using OpenRouter or OpenCode, use "anthropic/" prefix
 // Falls back to claude-sonnet-4-6 for faster/cheaper operations
-export const LUMI_MODEL = 'claude-opus-4-6';
-export const LUMI_FAST_MODEL = 'claude-sonnet-4-6';
+export const LUMI_MODEL = process.env.OPENROUTER_API_KEY || process.env.OPENCODE_API_KEY
+  ? 'anthropic/claude-opus-4-6'
+  : 'claude-opus-4-6';
+export const LUMI_FAST_MODEL = process.env.OPENROUTER_API_KEY || process.env.OPENCODE_API_KEY
+  ? 'anthropic/claude-sonnet-4-6'
+  : 'claude-sonnet-4-6';
 export const LUMI_MAX_TOKENS = 8192;
 export const LUMI_SUMMARY_MAX_TOKENS = 100;
+
+console.log('[anthropic] Configuration:', {
+  LUMI_MODEL,
+  LUMI_FAST_MODEL,
+  baseURL: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' :
+           process.env.OPENCODE_API_KEY ? (process.env.OPENCODE_API_ENDPOINT || 'https://api.opencode.ai/v1') :
+           'https://api.anthropic.com/v1',
+});
