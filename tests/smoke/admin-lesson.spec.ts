@@ -6,6 +6,7 @@ test('admin lesson generation page responds (login or content)', async ({ page }
   if (await lessonHeading.count()) {
     await expect(lessonHeading).toBeVisible();
   } else {
-    await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible();
+    const loginHeading = page.getByRole('heading', { name: /welcome back/i });
+    await expect(loginHeading).toBeVisible();
   }
 });
