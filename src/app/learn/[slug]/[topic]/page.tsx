@@ -24,7 +24,7 @@ import { MOCK_CHILD, MOCK_SUBJECTS, MOCK_TOPICS, LESSON_PHASE_LABELS } from '@/l
 import { clampMastery, detectCorrectResponse, detectExplanation } from '@/lib/mastery';
 import { getXPLevel, LessonPhase, ParsedContentSignal } from '@/types';
 import { buildContentManifest, getTopicProgress } from '@/lib/lesson-engine';
-import { createClient as createSupabaseBrowserClient } from '@/lib/supabase';
+import { getBrowserClient as getSupabaseBrowserClient } from '@/lib/supabase';
 import { MOCK_TOPIC_ASSETS, MOCK_FRACTION_BAR_DIAGRAM, MOCK_NUMBER_LINE } from '@/lib/mock-content';
 
 // ── Child profile helper ─────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ export default function LessonPage() {
     return () => {
       if (generationRef.current) clearInterval(generationRef.current);
       if (realtimeChannelRef.current) {
-        const supabase = createSupabaseBrowserClient();
+        const supabase = getSupabaseBrowserClient();
         void supabase.removeChannel(realtimeChannelRef.current);
         realtimeChannelRef.current = null;
       }
@@ -215,7 +215,7 @@ export default function LessonPage() {
     async (payload?: { content_manifest?: typeof generatedManifest }) => {
       if (generationRef.current) clearInterval(generationRef.current);
       if (realtimeChannelRef.current) {
-        const supabase = createSupabaseBrowserClient();
+        const supabase = getSupabaseBrowserClient();
         void supabase.removeChannel(realtimeChannelRef.current);
         realtimeChannelRef.current = null;
       }
@@ -230,14 +230,24 @@ export default function LessonPage() {
 
   const subscribeToLessonGeneration = useCallback((topicId: string, ageGroup: string) => {
     try {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = getSupabaseBrowserClient();
       if (realtimeChannelRef.current) {
         void supabase.removeChannel(realtimeChannelRef.current);
       }
 
       const channel = supabase
         .channel(`lesson-generation:${topicId}:${ageGroup}`)
-        .on('broadcast', { event: 'lesson_structure_ready' }, async ({ payload }) => {
+        .on(
+          'broadcast',
+          { event: 'lesson_structure_ready' },
+          async ({
+            payload,
+          }: {
+            payload: {
+              session_id?: string;
+              content_manifest?: typeof generatedManifest;
+            };
+          }) => {
           const eventPayload = payload as {
             session_id?: string;
             content_manifest?: typeof generatedManifest;
