@@ -6,13 +6,12 @@ let openaiClient: OpenAI | null = null;
 
 const usingOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
 const usingOpenCode = Boolean(process.env.OPENCODE_API_KEY);
-const usingAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
 
 const provider = usingOpenRouter ? 'openrouter' : usingOpenCode ? 'opencode' : 'anthropic';
 const baseURL = usingOpenRouter
   ? 'https://openrouter.ai/api/v1'
   : usingOpenCode
-    ? process.env.OPENCODE_API_ENDPOINT || 'https://api.opencode.ai/v1'
+    ? process.env.OPENCODE_API_ENDPOINT || 'https://opencode.ai/zen/v1'
     : 'https://api.anthropic.com/v1';
 const apiKey = usingOpenRouter
   ? process.env.OPENROUTER_API_KEY
@@ -28,7 +27,7 @@ if (!apiKey) {
 export function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     const config: ConstructorParameters<typeof Anthropic>[0] = {
-      apiKey: apiKey!,
+      apiKey,
       baseURL,
     };
     anthropicClient = new Anthropic(config);
@@ -49,12 +48,12 @@ export function getOpenAIClient(): OpenAI {
 export const LUMI_MODEL = usingOpenRouter
   ? 'anthropic/claude-opus-4-6'
   : usingOpenCode
-    ? 'anthropic/claude-opus-4-5'
+    ? 'claude-opus-4-5'
     : 'claude-opus-4-6';
 export const LUMI_FAST_MODEL = usingOpenRouter
   ? 'anthropic/claude-sonnet-4-6'
   : usingOpenCode
-    ? 'anthropic/claude-sonnet-4-5'
+    ? 'claude-sonnet-4-5'
     : 'claude-sonnet-4-6';
 export const LUMI_MAX_TOKENS = 8192;
 export const LUMI_SUMMARY_MAX_TOKENS = 100;
