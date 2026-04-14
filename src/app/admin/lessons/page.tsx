@@ -97,14 +97,14 @@ export default function AdminLessonsPage() {
       }
     };
     fetchSubjects();
-  }, []);
+  }, [supabase]);
 
   const selectedSubject = useMemo(
     () => subjects.find((s) => s.id === selectedSubjectId),
     [selectedSubjectId, subjects]
   );
 
-  const fetchLessons = useCallback(async () => {
+  const refreshLessons = useCallback(async () => {
     const { data, error } = await supabase
       .from('topic_lesson_structures')
       .select('*, topics(title, subjects(name))')
@@ -131,14 +131,14 @@ export default function AdminLessonsPage() {
           if (data.status === 'completed' || data.status === 'failed') {
             setIsPolling(false);
             if (data.status === 'completed') {
-              fetchLessons();
+              refreshLessons();
             }
           }
         }
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [isPolling, latestJob?.id, supabase, fetchLessons]);
+  }, [isPolling, latestJob?.id, supabase, refreshLessons]);
 
   // Auto-generate brief when topic and subject are ready
   const handleAutoBrief = async () => {
@@ -178,17 +178,6 @@ export default function AdminLessonsPage() {
     setBriefEdited(true);
   };
 
-  const fetchLessons = async () => {
-    const { data, error } = await supabase
-      .from('topic_lesson_structures')
-      .select('*, topics(title, subjects(name))')
-      .order('created_at', { ascending: false });
-    
-    if (!error && data) {
-      setLessons(data);
-    }
-  };
-
   const handleApprove = async (lessonId: string) => {
     setIsApproving(true);
     try {
@@ -200,7 +189,7 @@ export default function AdminLessonsPage() {
       
       if (res.ok) {
         alert('Lesson approved! You can now generate supporting content.');
-        fetchLessons();
+        refreshLessons();
         if (selectedLesson?.id === lessonId) {
           setSelectedLesson({ ...selectedLesson, status: 'live' });
         }
@@ -350,7 +339,7 @@ export default function AdminLessonsPage() {
           setIsPolling(true);
         }
         setActiveView('review');
-        fetchLessons();
+        refreshLessons();
       } else {
         const err = await res.json();
         setGenerationError(err.error || 'Failed to generate lesson');
@@ -382,7 +371,7 @@ export default function AdminLessonsPage() {
             <button
               onClick={() => {
                 setActiveView('review');
-                fetchLessons();
+                refreshLessons();
               }}
               className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                 activeView === 'review' ? 'bg-amber text-navy' : 'text-white hover:bg-white/5'

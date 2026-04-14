@@ -130,7 +130,7 @@ export default function MatchItGame({ asset, childAge, subjectColour, onComplete
 
         {/* Right column */}
         <div className="space-y-2">
-          {shuffledRight.current.map((pair) => {
+          {shuffledRight.map((pair) => {
             const isMatched = matched.has(pair.id);
             const isSelected = selectedRight === pair.id;
             const isWrong = wrongPair?.right === pair.id;
