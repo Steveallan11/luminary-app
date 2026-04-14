@@ -83,8 +83,11 @@ export default function ParentDashboard() {
     setIsDownloading(true);
     setShowReportMenu(false);
     try {
-      const url = `/api/reports/generate?child_id=${child.id}&period=${period}`;
+      const url = `/api/reports/generate?child_id=${child.id}&family_id=${family.id}&period=${period}`;
       const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Report generation failed: ${response.statusText}`);
+      }
       const html = await response.text();
       const blob = new Blob([html], { type: 'text/html' });
       const link = document.createElement('a');
