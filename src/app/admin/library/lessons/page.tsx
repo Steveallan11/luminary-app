@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '@/lib/supabase';
 import {
   BookOpen, Search, Filter, FlaskConical, Check, Loader2,
   ChevronRight, Sparkles, Eye, Edit3, Trash2, AlertCircle,
@@ -26,10 +26,7 @@ const PHASE_COLOURS: Record<string, string> = {
 
 export default function LessonLibraryPage() {
   const router = useRouter();
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = getBrowserClient();
 
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

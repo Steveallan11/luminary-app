@@ -1,17 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '@/lib/supabase';
 import { BookOpen, Layers, ArrowRight, Sparkles, Clock, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminLibraryPage() {
   const router = useRouter();
   const supabase = useMemo(
-    () => createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ),
+    () => getBrowserClient(),
     []
   );
 

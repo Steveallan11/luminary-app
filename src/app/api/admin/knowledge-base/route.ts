@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient, LUMI_MODEL } from '@/lib/anthropic';
 import { getServerSupabaseUrl } from '@/lib/server-env';
 
 export const maxDuration = 60;
@@ -12,7 +12,7 @@ function getAdminClient() {
   );
 }
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+const anthropic = getAnthropicClient();
 
 // GET: Fetch all knowledge base items for a lesson
 export async function GET(req: NextRequest) {
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     if (text_content && text_content.length > 100) {
       try {
         const summaryResponse = await anthropic.messages.create({
-          model: 'claude-opus-4-6',
+          model: LUMI_MODEL,
           max_tokens: 500,
           messages: [{
             role: 'user',

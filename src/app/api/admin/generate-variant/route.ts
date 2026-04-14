@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient, LUMI_MODEL } from '@/lib/anthropic';
 import { getServerSupabaseUrl } from '@/lib/server-env';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
-
-const LUMI_MODEL = 'claude-opus-4-6';
 
 type LearningStyle = 'visual' | 'auditory' | 'kinesthetic' | 'reading_writing';
 type LessonLength = 'full' | 'standard' | 'bite_size';
@@ -86,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(getServerSupabaseUrl(), process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+    const client = getAnthropicClient();
 
     // Determine which phases to generate based on lesson length
     const phasesToGenerate = lesson_length === 'bite_size'

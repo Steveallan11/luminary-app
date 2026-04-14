@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import KnowledgeBasePanel from '@/components/admin/KnowledgeBasePanel';
-import { createClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '@/lib/supabase';
 import {
   Wand2,
   Check,
@@ -50,10 +50,7 @@ interface LessonBrief {
 
 export default function AdminLessonsPage() {
   const supabase = useMemo(
-    () => createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ),
+    () => getBrowserClient(),
     []
   );
   const [activeView, setActiveView] = useState<'generate' | 'queue' | 'review'>('generate');

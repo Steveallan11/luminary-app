@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '@/lib/supabase';
 import {
   Layers, Search, ArrowLeft, Loader2, Eye, Edit3, Trash2,
   FileText, Image as ImageIcon, Gamepad2, BookOpen, Lightbulb,
@@ -19,10 +19,7 @@ const ASSET_TYPE_CONFIG: Record<string, { label: string; icon: any; colour: stri
 
 export default function ContentLibraryPage() {
   const router = useRouter();
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = getBrowserClient();
 
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
