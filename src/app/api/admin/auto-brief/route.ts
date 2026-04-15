@@ -76,20 +76,25 @@ function parseBrief(text: string, topicTitle: string, subjectName: string, ageGr
  * Returns suggested key concepts, misconceptions, real-world examples, and curriculum objectives.
  */
 export async function POST(request: NextRequest) {
+  let topicTitle = '';
+  let resolvedSubject = 'General';
+  let resolvedAgeGroup = '8-11';
+
   try {
     const body = await request.json();
     const { topic_title, subject_name, age_group } = body;
-    const resolvedSubject = subject_name || 'General';
-    const resolvedAgeGroup = age_group || '8-11';
+    topicTitle = topic_title || '';
+    resolvedSubject = subject_name || 'General';
+    resolvedAgeGroup = age_group || '8-11';
 
-    if (!topic_title) {
+    if (!topicTitle) {
       return NextResponse.json({ error: 'topic_title is required' }, { status: 400 });
     }
 
     const client = getAnthropicClient();
     const prompt = `You are a curriculum expert for Luminary, a UK homeschooling platform.
 Generate a lesson brief for the following topic:
-- Topic: ${topic_title}
+- Topic: ${topicTitle}
 - Subject: ${resolvedSubject}
 - Age Group: ${resolvedAgeGroup}
 
@@ -124,7 +129,7 @@ Return ONLY the JSON object, no markdown formatting, no code fences.`;
       text = response.content[0]?.type === 'text' ? response.content[0].text : '';
 
       try {
-        const brief = parseBrief(text, topic_title, resolvedSubject, resolvedAgeGroup);
+        const brief = parseBrief(text, topicTitle, resolvedSubject, resolvedAgeGroup);
         return NextResponse.json({ brief });
       } catch (error) {
         parseError = error instanceof Error ? error : new Error('Unknown parse error');
@@ -136,10 +141,18 @@ Return ONLY the JSON object, no markdown formatting, no code fences.`;
       preview: text.slice(0, 500),
     });
 
-    const brief = buildFallbackBrief(topic_title, resolvedSubject, resolvedAgeGroup);
+    const brief = buildFallbackBrief(topicTitle, resolvedSubject, resolvedAgeGroup);
     return NextResponse.json({ brief });
   } catch (error) {
     console.error('Auto-brief generation error:', error);
-    return NextResponse.json({ error: 'Failed to generate brief' }, { status: 500 });
+    if (!topicTitle) {
+      return NextResponse.json({ error: 'Failed to generate brief' }, { status: 500 });
+    }
+
+    const brief = buildFallbackBrief(topicTitle, resolvedSubject, resolvedAgeGroup);
+    return NextResponse.json({
+      brief,
+      warning: 'Generated fallback brief because the AI request failed.',
+    });
   }
 }

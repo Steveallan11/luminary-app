@@ -9,6 +9,10 @@ import { getServerSupabaseUrl } from '@/lib/server-env';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
+function isMissingRelationError(message: string): boolean {
+  return /relation .* does not exist|Could not find the table|schema cache/i.test(message);
+}
+
 function getServiceClient() {
   const url = getServerSupabaseUrl();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -33,7 +37,13 @@ export async function GET(request: NextRequest) {
       .eq('is_active', true)
       .order('display_order', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelationError(error.message)) {
+        console.warn('lesson_phase_media table unavailable, returning empty media list');
+        return NextResponse.json({ success: true, media: [], warning: 'lesson_phase_media table unavailable' });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true, media: data || [] });
   } catch (error) {
@@ -84,7 +94,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelationError(error.message)) {
+        return NextResponse.json({ error: 'Lesson media storage is not available yet' }, { status: 503 });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true, media: data });
   } catch (error) {
@@ -109,7 +124,12 @@ export async function DELETE(request: NextRequest) {
       .update({ is_active: false })
       .eq('id', media_id);
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelationError(error.message)) {
+        return NextResponse.json({ error: 'Lesson media storage is not available yet' }, { status: 503 });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -137,7 +157,12 @@ export async function PATCH(request: NextRequest) {
       .update({ [phaseColumn]: phase_json_override })
       .eq('id', lesson_id);
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelationError(error.message)) {
+        return NextResponse.json({ error: 'Lesson media storage is not available yet' }, { status: 503 });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
